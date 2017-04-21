@@ -9,9 +9,9 @@
 #include <stdint.h>
 #include <unistd.h>
 
- /*******************************************
-  * 宏（机器相关）
-  *******************************************/
+/*******************************************
+ * 宏（机器相关）
+ *******************************************/
 #define CACHE_LINE_SIZE 64
 #define PAGE_SIZE 4 * 1024
 #define PAGES *PAGE_SIZE
@@ -20,22 +20,23 @@
 #define GB *(size_t)1024 MB
 #define TB *(size_t)1024 GB
 
-  /*******************************************
-   * 宏（分配器参数）
-   *******************************************/
+/*******************************************
+ * 宏（分配器参数）
+ *******************************************/
 #define NUM_SDB_PAGES 10
 #define NUM_SIZE_CLASSES 24
 #define SIZE_SDB (size_t)(NUM_SDB_PAGES * PAGE_SIZE)
 #define LENGTH_DATA_POOL (size_t)(8 TB)
 #define LENGTH_META_POOL (size_t)(1 TB)
-#define LENGTH_REVERSE_ADDRESSING_HASHSET \
-	(size_t)256 TB / SIZE_SDB * sizeof(void*)
-#define STARTA_ADDR_META_POOL (void*)0x600000000000
-#define STARTA_ADDR_DATA_POOL (void*)0x700000000000
+#define LENGTH_REVERSE_ADDRESSING_HASHSET                                      \
+  (size_t)256 TB / SIZE_SDB * sizeof(void *)
+#define STARTA_ADDR_META_POOL (void *)0x600000000000
+#define STARTA_ADDR_DATA_POOL (void *)0x700000000000
 
-   /*******************************************
-	* 宏（函数编程）
-	*******************************************/
+/*******************************************
+     * 宏（函数编程）
+     *******************************************/
+#define ACTIVE ((void *)1)
 typedef unsigned long long ptr_t;
 #define ROUNDUP(x, n) ((x + n - 1) & (~(n - 1)))
 #define ROUNDDOWN(x, n) (((x - n) & (~(n - 1))) + 1)
@@ -57,7 +58,7 @@ typedef unsigned long long ptr_t;
 #define ABA_ADDR_MASK ((1L << ABA_ADDR_BIT) - 1)
 #define ABA_COUNT_MASK (~ABA_ADDR_MASK)
 #define ABA_COUNT_ONE (1L << ABA_ADDR_BIT)
-#define ABA_ADDR(e)     ((void*)((ptr_t)(e) & ABA_ADDR_MASK))
-#define ABA_COUNT(e)    ((ptr_t)(e) & ABA_COUNT_MASK)
+#define ABA_ADDR(e) ((void *)((ptr_t)(e)&ABA_ADDR_MASK))
+#define ABA_COUNT(e) ((ptr_t)(e)&ABA_COUNT_MASK)
 
 #endif // end of DEFS_H

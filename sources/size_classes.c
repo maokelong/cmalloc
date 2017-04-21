@@ -8,7 +8,7 @@
 /*******************************************
  * 全局变量定义
  *******************************************/
- // 定义 Tiny Class 的最大值及递增步长
+// 定义 Tiny Class 的最大值及递增步长
 const size_t MAX_TINY_CLASSES = 256;
 const size_t STEP_TINY_CLASSES = 16;
 
@@ -19,103 +19,101 @@ const size_t MAX_MEDIUM_CLASSES = 65536;
  * 内联微函数定义
  *******************************************/
 
- // 是否处于 tiny class
+// 是否处于 tiny class
 static inline bool InTinyClasses(size_t size) {
-	return size <= MAX_TINY_CLASSES;
+  return size <= MAX_TINY_CLASSES;
 }
 
 // 是否处于 medium class
 static inline bool InMediumClasses(size_t size) {
-	return size <= MAX_MEDIUM_CLASSES&&size > MAX_TINY_CLASSES;
+  return size <= MAX_MEDIUM_CLASSES && size > MAX_TINY_CLASSES;
 }
 
 // tiny class 的数量
 static inline size_t NumTinyClasses(void) {
-	return MAX_TINY_CLASSES / STEP_TINY_CLASSES;
+  return MAX_TINY_CLASSES / STEP_TINY_CLASSES;
 }
 
 // tiny class 步长的掩码
 static inline size_t MaskTinyStep(void) { return STEP_TINY_CLASSES - 1; }
 
 static inline size_t Power(size_t x, size_t y) {
-	size_t sum = x;
-	if (y == 0)
-		return 1;
+  size_t sum = x;
+  if (y == 0)
+    return 1;
 
-	while (--y != 0)
-		sum *= x;
-	return sum;
+  while (--y != 0)
+    sum *= x;
+  return sum;
 }
 
 /*******************************************
  * 函数定义
  *******************************************/
 
- // 计算以 2 为底的对数(64位)
- // code from:
- // http://stackoverflow.com/questions/11376288/fast-computing-of-log2-for-64-bit-integers）
+// 计算以 2 为底的对数(64位)
+// code from:
+// http://stackoverflow.com/questions/11376288/fast-computing-of-log2-for-64-bit-integers）
 
- // 定义用于计算log2结果的矩阵
+// 定义用于计算log2结果的矩阵
 static const int tab64[64] = {
-	63, 0,  58, 1,  59, 47, 53, 2,  60, 39, 48, 27, 54, 33, 42, 3,
-	61, 51, 37, 40, 49, 18, 28, 20, 55, 30, 34, 11, 43, 14, 22, 4,
-	62, 57, 46, 52, 38, 26, 32, 41, 50, 36, 17, 19, 29, 10, 13, 21,
-	56, 45, 25, 31, 35, 16, 9,  12, 44, 24, 15, 8,  23, 7,  6,  5 };
+    63, 0,  58, 1,  59, 47, 53, 2,  60, 39, 48, 27, 54, 33, 42, 3,
+    61, 51, 37, 40, 49, 18, 28, 20, 55, 30, 34, 11, 43, 14, 22, 4,
+    62, 57, 46, 52, 38, 26, 32, 41, 50, 36, 17, 19, 29, 10, 13, 21,
+    56, 45, 25, 31, 35, 16, 9,  12, 44, 24, 15, 8,  23, 7,  6,  5};
 
 static int log2_64(uint64_t value) {
-	value |= value >> 1;
-	value |= value >> 2;
-	value |= value >> 4;
-	value |= value >> 8;
-	value |= value >> 16;
-	value |= value >> 32;
-	return tab64[((uint64_t)((value - (value >> 1)) * 0x07EDD5E59A4E28C2)) >> 58];
+  value |= value >> 1;
+  value |= value >> 2;
+  value |= value >> 4;
+  value |= value >> 8;
+  value |= value >> 16;
+  value |= value >> 32;
+  return tab64[((uint64_t)((value - (value >> 1)) * 0x07EDD5E59A4E28C2)) >> 58];
 }
 
 /*******************************************
  * 全局函数定义
  *******************************************/
 
-bool InSmallSize(int size_class) {
-	return size_class <= NUM_SIZE_CLASSES;
-}
+bool InSmallSize(int size_class) { return size_class <= NUM_SIZE_CLASSES; }
 
 // 将 size 转换为 size class
 int SizeToSizeClass(size_t size) {
-	// 处理小型尺寸(1-256)
-	if (InTinyClasses(size))
-		return (size + MaskTinyStep()) / STEP_TINY_CLASSES - 1;
+  // 处理小型尺寸(1-256)
+  if (InTinyClasses(size))
+    return (size + MaskTinyStep()) / STEP_TINY_CLASSES - 1;
 
-	// 处理中型尺寸(257-65536)
-	if (InMediumClasses(size))
-		return log2_64(size - 1) - log2_64(MAX_TINY_CLASSES) + NumTinyClasses();
+  // 处理中型尺寸(257-65536)
+  if (InMediumClasses(size))
+    return log2_64(size - 1) - log2_64(MAX_TINY_CLASSES) + NumTinyClasses();
 
-	// 其余尺寸（0 或 65536+）
-	return -1;
+  // 其余尺寸（0 或 65536+）
+  return -1;
 }
 
 // 将 Size Class 转换为 Block Size
 size_t SizeClassToBlockSize(int size_class) {
-	if (size_class < NumTinyClasses())
-		return (size_class + 1) * 16;
-	else
-		return MAX_TINY_CLASSES * Power(2, size_class + 1 - NumTinyClasses());
+  if (size_class < NumTinyClasses())
+    return (size_class + 1) * 16;
+  else
+    return MAX_TINY_CLASSES * Power(2, size_class + 1 - NumTinyClasses());
 }
 
 // 将 size 转换为 block size
 size_t SizeToBLockSize(size_t size) {
-	// 处理小型尺寸(1-256)
-	if (InTinyClasses(size))
-		return (size + MaskTinyStep()) & ~MaskTinyStep();
+  // 处理小型尺寸(1-256)
+  if (InTinyClasses(size))
+    return (size + MaskTinyStep()) & ~MaskTinyStep();
 
-	// 处理中型尺寸(257-65536)
-	if (InMediumClasses(size))
-		return 1UL << (log2_64(size - 1) + 1);
+  // 处理中型尺寸(257-65536)
+  if (InMediumClasses(size))
+    return 1UL << (log2_64(size - 1) + 1);
 
-	// ASSERT: 不可能执行的路径
-	return 0;
+  // ASSERT: 不可能执行的路径
+  return 0;
 }
 
 size_t SizeClassToNumDataBlocks(int size_class) {
-	return SIZE_SDB / SizeClassToBlockSize(size_class);
+  return SIZE_SDB / SizeClassToBlockSize(size_class);
 }
