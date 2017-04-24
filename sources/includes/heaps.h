@@ -14,8 +14,8 @@
 #include "sds.h"
 
 /*******************************************
-                结构声明
-********************************************/
+ * 结构声明
+ *******************************************/
 
 typedef struct super_meta_block_ super_meta_block;
 typedef void super_data_block;
@@ -27,13 +27,13 @@ typedef struct global_pool_ global_pool;
 typedef struct global_heap_pool_ global_heap_pool;
 
 /*******************************************
-                全局变量声明
-********************************************/
+ * 全局变量声明
+ *******************************************/
 extern global_pool GLOBAL_POOL;
 
 /*******************************************
-超级元数据块
-********************************************/
+ * 超级元数据块
+ *******************************************/
 
 typedef enum { hot, warm, cold } life_cycle;
 
@@ -45,8 +45,10 @@ struct shadow_block_ {
 // 超级元数据块描述符
 struct super_meta_block_ {
   seq_queue_head prev_smb;
+  size_t num_allocated_blocks;
   void *end_addr;
-  seq_queue_head freed_blocks;
+  seq_queue_head local_free_blocks;
+  sc_queue_head remote_free_blocks;
   void *clean_zone;
   int size_class;
   life_cycle cur_cycle;
@@ -54,8 +56,8 @@ struct super_meta_block_ {
 };
 
 /*******************************************
-线程本地堆
-********************************************/
+ * 线程本地堆
+ *******************************************/
 
 // 线程本地堆定义
 struct thread_local_heap_ {
@@ -68,6 +70,7 @@ struct thread_local_heap_ {
   seq_queue_head cold_smbs[NUM_SIZE_CLASSES + 1];
 
   size_t num_cold_smbs;
+  pthread_t hold_thread;
 };
 /*******************************************
                 全局池
@@ -79,7 +82,7 @@ struct global_meta_pool_ {
   volatile void *pool_end;
   volatile void *pool_clean;
   mc_queue_head reusable_smbs[NUM_SIZE_CLASSES + 1];
-  mc_queue_head reusable_heaps;
+  mc_queue_head *reusable_heaps; // ! dynamic array
 };
 
 // 全局数据池描述符
@@ -101,7 +104,7 @@ struct global_pool_ {
 ********************************************/
 // 初始化
 void global_pool_init(void);
-void reverse_addressing_hashset_init(void);
+void rev_addr_hashset_init(void);
 
 // 池分配
 thread_local_heap *global_pool_allocate_heap(void);

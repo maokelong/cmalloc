@@ -28,8 +28,7 @@
 #define SIZE_SDB (size_t)(NUM_SDB_PAGES * PAGE_SIZE)
 #define LENGTH_DATA_POOL (size_t)(8 TB)
 #define LENGTH_META_POOL (size_t)(1 TB)
-#define LENGTH_REVERSE_ADDRESSING_HASHSET                                      \
-  (size_t)256 TB / SIZE_SDB * sizeof(void *)
+#define LENGTH_REV_ADDR_HASHSET (size_t)256 TB / SIZE_SDB * sizeof(void *)
 #define STARTA_ADDR_META_POOL (void *)0x600000000000
 #define STARTA_ADDR_DATA_POOL (void *)0x700000000000
 

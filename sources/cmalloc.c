@@ -45,7 +45,7 @@ static void global_init(void) {
 
   // Init inner datastructures
   global_pool_init();
-  reverse_addressing_hashset_init();
+  rev_addr_hashset_init();
   GLOBAL_STATE = INITIALIZED;
 }
 

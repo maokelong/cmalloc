@@ -4,7 +4,7 @@
 #include <sys/sysinfo.h>
 #include <unistd.h>
 
-static inline int get_num_cores(void) { return core_num(); }
+static inline int get_num_cores(void) { return get_nprocs(); }
 
 static inline int get_core_id(void) {
   int result;
@@ -28,7 +28,7 @@ static inline void *require_vm(void *base_addr, size_t size) {
 }
 
 static inline void *require_nvm(void *file_name, void *base_addr, size_t size) {
-  // TODO: nvm allocation
+  // TODO: allocate nvm address space
   return NULL;
 }
 #endif // ! STORAGE_H
