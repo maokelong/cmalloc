@@ -35,7 +35,7 @@ extern global_pool GLOBAL_POOL;
  * 超级元数据块
  *******************************************/
 
-typedef enum { hot, warm, cold } life_cycle;
+typedef enum { hot, warm, cold, frozen } life_cycle;
 
 // 影子块描述符
 struct shadow_block_ {
@@ -45,7 +45,7 @@ struct shadow_block_ {
 // 超级元数据块描述符
 struct super_meta_block_ {
   seq_queue_head prev_smb;
-  size_t num_allocated_blocks;
+  int num_allocated_blocks;
   void *end_addr;
   seq_queue_head local_free_blocks;
   sc_queue_head remote_free_blocks;
@@ -68,12 +68,15 @@ struct thread_local_heap_ {
   seq_queue_head warm_smbs[NUM_SIZE_CLASSES + 1];
   // cold：全部 blocks 都可用
   seq_queue_head cold_smbs[NUM_SIZE_CLASSES + 1];
+  // frozen: 全部blocks均解除虚拟地址-物理地址映射
+  seq_queue_head frozen_smbs[NUM_SIZE_CLASSES + 1];
 
   size_t num_cold_smbs;
+  size_t num_smbs;
   pthread_t hold_thread;
 };
 /*******************************************
-                全局池
+                                全局池
 ********************************************/
 
 // 全局元数据池描述符

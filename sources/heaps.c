@@ -52,7 +52,6 @@ static inline void *
 super_meta_block_allocate_from_clean(super_meta_block *smb) {
   void *ret = smb->clean_zone;
   smb->clean_zone += sizeof(shadow_block);
-  smb->num_allocated_blocks++;
   return ret;
 }
 
@@ -102,8 +101,32 @@ static inline void super_block_init_except_own_sdb(super_meta_block *smb,
 void super_block_convert_life_cycle(thread_local_heap *tlh,
                                     super_meta_block *smb,
                                     life_cycle target_life_cycle) {
-  if (smb->cur_cycle == cold)
+
+  // when smb's current life cycle is equal to the target life cycle,
+  // there are two possible scenarios:
+  // 1. cmalloc is being cracked
+  // 2. cmalloc is to init a cold smb
+  if (smb->cur_cycle == target_life_cycle) {
+    if (target_life_cycle == cold) {
+      seq_dequeue(&smb->prev_smb);
+      seq_enqueue(&tlh->cold_smbs[smb->size_class], smb);
+      smb->cur_cycle = cold;
+      tlh->num_cold_smbs++;
+
+      super_block_init_except_own_sdb(smb, smb->size_class);
+    }
+    return;
+  }
+
+  switch (smb->cur_cycle) {
+  case cold:
     tlh->num_cold_smbs--;
+    break;
+  case frozen:
+    tlh->num_smbs++;
+    break;
+  default:;
+  }
 
   switch (target_life_cycle) {
   case hot:
@@ -123,6 +146,20 @@ void super_block_convert_life_cycle(thread_local_heap *tlh,
     tlh->num_cold_smbs++;
 
     super_block_init_except_own_sdb(smb, smb->size_class);
+
+    // Freeze the correlated super data block when the ratio of
+    // cold sbs and sbs not frozen is greater than FROZEN_RATIO
+    if (tlh->num_smbs &&
+        (tlh->num_cold_smbs * 100 / tlh->num_smbs > FROZEN_RATIO))
+      super_block_convert_life_cycle(tlh, smb, frozen);
+    break;
+  case frozen:
+    seq_dequeue(&smb->prev_smb);
+    seq_enqueue(&tlh->frozen_smbs[smb->size_class], smb);
+    smb->cur_cycle = frozen;
+    tlh->num_smbs--;
+
+    freeze_vm(smb->own_sdb, SIZE_SDB);
     break;
   }
 }
@@ -267,6 +304,7 @@ static inline void thread_local_heap_init(thread_local_heap *tlh) {
     tlh->hot_smbs[i] = NULL;
   }
   tlh->num_cold_smbs = 0;
+  tlh->num_smbs = 0;
   tlh->hold_thread = pthread_self();
 }
 
@@ -284,13 +322,18 @@ thread_local_heap_allocate_data_block_from_hot(thread_local_heap *tlh,
   return super_block_allocate_data_block(tlh, hot_smb);
 }
 
-static inline void *
-thread_local_heap_allocate_data_block_from_cold(thread_local_heap *tlh,
-                                                int size_class) {
+static inline void *thread_local_heap_allocate_data_block_from_cold_and_frozen(
+    thread_local_heap *tlh, int size_class) {
   super_meta_block *cold_smb = NULL;
 
-  // check for cold smbs within tlh
+  // check for cold smbs within current tlh
   cold_smb = (super_meta_block *)tlh->cold_smbs[size_class];
+
+  // check for frozen smbs within current tlh instead
+  if (cold_smb == NULL)
+    cold_smb = (super_meta_block *)tlh->frozen_smbs[size_class];
+
+  // no more available smbs within current tlh
   if (cold_smb == NULL)
     return NULL;
 
@@ -302,7 +345,7 @@ static inline void thread_local_heap_request_cold(thread_local_heap *tlh,
                                                   int size_class) {
   super_meta_block *cold_smb = NULL;
 
-  // check freed smbs
+  // check for freed cold smbs
   cold_smb = (super_meta_block *)mc_dequeue(
       &GLOBAL_POOL.meta_pool.reusable_smbs[size_class], 0);
 
@@ -312,6 +355,8 @@ static inline void thread_local_heap_request_cold(thread_local_heap *tlh,
 
   // insert the raw smb into cold smbs list
   super_block_convert_life_cycle(tlh, cold_smb, cold);
+
+  tlh->num_smbs++;
 }
 
 /*******************************************
@@ -379,15 +424,16 @@ void *thread_local_heap_allocate_data_block(thread_local_heap *tlh,
   if (ret != NULL)
     return ret;
 
-  // try to allocate a data block form cold smbs
   while (1) {
-    ret = thread_local_heap_allocate_data_block_from_cold(tlh, size_class);
+    // try to allocate a data block form cold smbs and frozen smbs
+    ret = thread_local_heap_allocate_data_block_from_cold_and_frozen(
+        tlh, size_class);
 
     if (ret == NULL)
-      // failed in retrieving a cold super block from current tlh,
-      // which shows that there is no cold super block on the tlh,
-      // therefore we request a raw super block from global pool and mark it
-      // cold
+      // failed in retrieving a cold/frozen super blockfrom current tlh,
+      // which shows that there is no cold/frozen super block on the tlh,
+      // therefore we will request a raw super block from global pool and
+      // mark it cold
       thread_local_heap_request_cold(tlh, size_class);
     else
       break;
@@ -411,7 +457,7 @@ void thread_local_heap_deallocate_data_block(thread_local_heap *tlh,
   } else {
     sc_enqueue(&smb->remote_free_blocks, correlated_shadow_block, 0);
   }
-  smb->num_allocated_blocks--;
+  smb->num_allocated_blocks--; // TODO: add thread-safety support - -|
 
   // check the smb's life cycle
   switch (smb->cur_cycle) {

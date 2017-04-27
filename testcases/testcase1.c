@@ -1,11 +1,14 @@
 /*
-    检查编译链接能否顺利完成
+ 检查编译链接能否顺利完成，并分配一个完整的超级数据块
 */
 
 #include "../sources/includes/cmalloc.h"
 #include <stdio.h>
 int main(int argc, char *argv[]) {
-  void *ptr = malloc(0);
-  printf("%p\n", ptr);
+  int i;
+  for (i = 0; i < 4096; ++i) {
+    int *ptr = (int *)malloc(1);
+    printf("%d\t%p\n", i, ptr);
+  }
   return 0;
 }
