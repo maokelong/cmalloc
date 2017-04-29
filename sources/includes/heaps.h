@@ -44,11 +44,13 @@ struct shadow_block_ {
 
 // 超级元数据块描述符
 struct super_meta_block_ {
-  seq_queue_head prev_smb;
-  int num_allocated_blocks;
+  seq_queue_head prev_sb;
+  sc_queue_head prev_cool_sb;
+  thread_local_heap *owner_tlh;
+  int num_allocated_and_remote_blocks;
   void *end_addr;
   seq_queue_head local_free_blocks;
-  sc_queue_head remote_free_blocks;
+  counted_queue_head remote_freed_blocks;
   void *clean_zone;
   int size_class;
   life_cycle cur_cycle;
@@ -62,17 +64,14 @@ struct super_meta_block_ {
 // 线程本地堆定义
 struct thread_local_heap_ {
   cache_aligned mc_queue_head freed_list;
-  // hot：至少有一个可用block
-  seq_queue_head hot_smbs[NUM_SIZE_CLASSES + 1];
-  // warm：所有blocks均以用尽
-  seq_queue_head warm_smbs[NUM_SIZE_CLASSES + 1];
-  // cold：全部 blocks 都可用
-  seq_queue_head cold_smbs[NUM_SIZE_CLASSES + 1];
-  // frozen: 全部blocks均解除虚拟地址-物理地址映射
-  seq_queue_head frozen_smbs[NUM_SIZE_CLASSES + 1];
+  seq_queue_head hot_sbs[NUM_SIZE_CLASSES + 1];
+  seq_queue_head warm_sbs[NUM_SIZE_CLASSES + 1];
+  seq_queue_head cold_sbs[NUM_SIZE_CLASSES + 1];
+  seq_queue_head frozen_sbs[NUM_SIZE_CLASSES + 1];
+  sc_queue_head cool_sbs[NUM_SIZE_CLASSES + 1];
 
-  size_t num_cold_smbs;
-  size_t num_smbs;
+  size_t num_cold_sbs;
+  size_t num_liquid_sbs;
   pthread_t hold_thread;
 };
 /*******************************************
@@ -84,8 +83,8 @@ struct global_meta_pool_ {
   volatile void *pool_start;
   volatile void *pool_end;
   volatile void *pool_clean;
-  mc_queue_head reusable_smbs[NUM_SIZE_CLASSES + 1];
-  mc_queue_head *reusable_heaps; // ! dynamic array
+  mc_queue_head reusable_sbs[NUM_SIZE_CLASSES + 1];
+  mc_queue_head *reusable_heaps; // dynamic array
 };
 
 // 全局数据池描述符
@@ -97,7 +96,6 @@ struct global_data_pool_ {
 
 // 全局池描述符
 struct global_pool_ {
-  pthread_spinlock_t spin_lock;
   global_meta_pool meta_pool;
   global_data_pool data_pool;
 };
@@ -110,13 +108,13 @@ void global_pool_init(void);
 void rev_addr_hashset_init(void);
 
 // 池分配
-thread_local_heap *global_pool_allocate_heap(void);
+thread_local_heap *global_pool_make_raw_heap(void);
 void global_pool_deallocate_heap(thread_local_heap *tlh);
 
 // 堆分配
-void *thread_local_heap_allocate_data_block(thread_local_heap *tlh,
+void *thread_local_heap_allocate(thread_local_heap *tlh,
                                             int size_class);
-void thread_local_heap_deallocate_data_block(thread_local_heap *tlh,
+void thread_local_heap_deallocate(thread_local_heap *tlh,
                                              void *data_block);
 
 #endif // end of HEAPS_H

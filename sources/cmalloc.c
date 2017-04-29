@@ -27,7 +27,7 @@ thread_local thread_local_heap *THREAD_LOCAL_HEAP = NULL;
  *******************************************/
 
 static void *small_malloc(int size_class) {
-  return thread_local_heap_allocate_data_block(THREAD_LOCAL_HEAP, size_class);
+  return thread_local_heap_allocate(THREAD_LOCAL_HEAP, size_class);
 }
 
 static void *large_malloc(size_t size) {
@@ -54,7 +54,7 @@ static void thread_init(void) {
   pthread_setspecific(KEY_DESTRUCTOR, ACTIVE);
 
   // Initialize thread pool
-  THREAD_LOCAL_HEAP = global_pool_allocate_heap();
+  THREAD_LOCAL_HEAP = global_pool_make_raw_heap();
   THREAD_STATE = INITIALIZED;
 }
 
@@ -98,7 +98,7 @@ void free(void *ptr) {
       ptr > GLOBAL_POOL.data_pool.pool_end)
     ;
   else
-    thread_local_heap_deallocate_data_block(THREAD_LOCAL_HEAP, ptr);
+    thread_local_heap_deallocate(THREAD_LOCAL_HEAP, ptr);
 }
 
 int mallopt(int parameter_number, int parameter_value);
