@@ -101,3 +101,5 @@ void free(void *ptr) {
 }
 
 int mallopt(int parameter_number, int parameter_value);
+
+void malloc_trace(void) { thread_local_heap_trace(&THREAD_LOCAL_HEAP); }

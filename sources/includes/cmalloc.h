@@ -12,5 +12,6 @@ void *realloc(void *ptr, size_t size);
 
 /*Additional functions*/
 int mallopt(int parameter_number, int parameter_value);
+void malloc_trace(void);
 
 #endif // end of CMALLOC_H

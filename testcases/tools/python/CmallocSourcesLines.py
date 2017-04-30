@@ -13,5 +13,3 @@ for dir_path, dirs_name, files_name in os.walk(PATH_CMALLOC):
         print("%s:%d" % (file_name, source_lines))
         TOTAL_LINES += source_lines
 print(TOTAL_LINES)
-
-

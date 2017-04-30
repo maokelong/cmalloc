@@ -38,15 +38,18 @@ static inline bool super_block_satisfy_frozen(thread_local_heap *tlh,
 static inline bool super_block_satisfy_cold(super_meta_block *sb);
 static inline bool super_block_satisfy_hot(super_meta_block *sb);
 static inline bool super_block_satisfy_warm(super_meta_block *sb);
-void super_block_check_life_cycle_and_update_counter_when_malloc(
+static inline void super_block_check_life_cycle_and_update_counter_when_malloc(
     thread_local_heap *tlh, super_meta_block *sb);
-void super_block_check_life_cycle_and_update_counter_when_free(
+static inline void super_block_check_life_cycle_and_update_counter_when_free(
     thread_local_heap *tlh, super_meta_block *sb);
 void super_block_convert_life_cycle(thread_local_heap *tlh,
                                     super_meta_block *sb,
                                     life_cycle target_life_cycle);
+void super_block_trace(seq_queue_head queue);
+
 /* global pool */
 global_pool GLOBAL_POOL;
+static inline size_t global_meta_pool_index_sdb(void *sdb);
 static inline void global_meta_pool_init(void);
 static inline void global_data_pool_init(void);
 static inline super_meta_block *global_pool_make_raw_smb(int size_class);
@@ -77,6 +80,30 @@ thread_local_heap_fetch_and_flush_cool_sb(thread_local_heap *tlh,
 static inline super_meta_block *
 thread_local_heap_load_cached_or_request_new_frozen_sb(thread_local_heap *tlh,
                                                        int size_class);
+
+/*******************************************
+* @ Definition
+* @ About the life cycle
+*******************************************/
+char *life_cycle_enum_to_name(life_cycle life_cycle_) {
+  char *str_life_cycle = NULL;
+  ;
+  switch (life_cycle_) {
+  case hot:
+    str_life_cycle = "hot";
+    break;
+  case warm:
+    str_life_cycle = "warm";
+    break;
+  case cold:
+    str_life_cycle = "cold";
+    break;
+  case frozen:
+    str_life_cycle = "frozen";
+    break;
+  }
+  return str_life_cycle;
+}
 
 /*******************************************
  * @ Definition
@@ -258,7 +285,7 @@ static inline bool super_block_satisfy_warm(super_meta_block *sb) {
          SizeClassToNumDataBlocks(sb->size_class);
 }
 
-void super_block_check_life_cycle_and_update_counter_when_malloc(
+static inline void super_block_check_life_cycle_and_update_counter_when_malloc(
     thread_local_heap *tlh, super_meta_block *sb) {
   sb->num_allocated_and_remote_blocks++;
   switch (sb->cur_cycle) {
@@ -309,7 +336,7 @@ void super_block_check_life_cycle_and_update_counter_when_malloc(
   }
 }
 
-void super_block_check_life_cycle_and_update_counter_when_free(
+static inline void super_block_check_life_cycle_and_update_counter_when_free(
     thread_local_heap *tlh, super_meta_block *sb) {
   sb->num_allocated_and_remote_blocks--;
   switch (sb->cur_cycle) {
@@ -349,30 +376,61 @@ void super_block_check_life_cycle_and_update_counter_when_free(
 void super_block_convert_life_cycle(thread_local_heap *tlh,
                                     super_meta_block *sb,
                                     life_cycle target_life_cycle) {
+  // dequeue
+  switch (sb->cur_cycle) {
+  case hot:
+    seq_dequeue(&tlh->hot_sbs[sb->size_class]);
+    break;
+  case warm:
+    // TODO: use double list for warm!
+    seq_dequeue(&tlh->warm_sbs[sb->size_class]);
+    break;
+  case cold:
+    seq_dequeue(&tlh->cold_sbs[sb->size_class]);
+    break;
+  case frozen:
+    seq_dequeue(&tlh->frozen_sbs[sb->size_class]);
+    break;
+  }
+
+  // enqueue
   switch (target_life_cycle) {
   case hot:
-    seq_dequeue(&sb->prev_sb);
     seq_enqueue(&tlh->hot_sbs[sb->size_class], sb);
     sb->cur_cycle = hot;
     break;
   case warm:
-    seq_dequeue(&sb->prev_sb);
     seq_enqueue(&tlh->warm_sbs[sb->size_class], sb);
     sb->cur_cycle = warm;
     break;
   case cold:
-    seq_dequeue(&sb->prev_sb);
     seq_enqueue(&tlh->cold_sbs[sb->size_class], sb);
     sb->cur_cycle = cold;
     break;
   case frozen:
-    seq_dequeue(&sb->prev_sb);
     seq_enqueue(&tlh->frozen_sbs[sb->size_class], sb);
     sb->cur_cycle = frozen;
 
     freeze_vm(sb->own_sdb, SIZE_SDB);
     break;
   }
+}
+
+void super_block_trace(seq_queue_head queue) {
+  super_meta_block *sb = (super_meta_block *)queue;
+  printf("\t\tsuperblock( %lu ):\n", global_meta_pool_index_sdb(sb->own_sdb));
+  printf("\t\t\tsize calss: %d\n", sb->size_class);
+  printf("\t\t\tlife cycle: %s\n", life_cycle_enum_to_name(sb->cur_cycle));
+  printf("\t\t\tnum alloced / remotely freed: %d\n",
+         sb->num_allocated_and_remote_blocks);
+  printf("\t\t\tnum locally freed:%d\n",
+         seq_visit(sb->local_free_blocks, NULL));
+  printf("\t\t\tnum remotely freed:%d\n",
+         counted_num_elems(&sb->remote_freed_blocks));
+  printf("\t\t\tnum total:%lu\n", SizeClassToNumDataBlocks(sb->size_class));
+  printf("\t\t\tstart addr:%p\n", sb);
+  printf("\t\t\tclean addr:%p\n", sb->clean_zone);
+  printf("\t\t\tend addr:%p\n", sb->end_addr);
 }
 /*******************************************
  * @ Definition
@@ -382,6 +440,10 @@ void super_block_convert_life_cycle(thread_local_heap *tlh,
 void global_pool_init(void) {
   global_meta_pool_init();
   global_data_pool_init();
+}
+
+static inline size_t global_meta_pool_index_sdb(void *sdb) {
+  return (sdb - GLOBAL_POOL.data_pool.pool_start) / SIZE_SDB;
 }
 
 static inline void global_meta_pool_init(void) {
@@ -711,4 +773,30 @@ void thread_local_heap_deallocate(thread_local_heap *tlh, void *data_block) {
       sc_enqueue(&smb->owner_tlh->cool_sbs[smb->size_class], &smb->prev_cool_sb,
                  0);
   }
+}
+
+void thread_local_heap_trace(thread_local_heap **pTlh) {
+  int num_frozens = 0, num_colds = 0, num_hot = 0, num_warms = 0;
+  thread_local_heap *tlh = *pTlh;
+  printf("Address of the thread local heap: %p\n", tlh);
+  int i;
+  printf("\tFrozen superblocks:\n");
+  for (i = 0; i < NUM_SIZE_CLASSES; ++i)
+    num_frozens += seq_visit(tlh->frozen_sbs[i], &super_block_trace);
+  printf("\t\t->Sum up to %d:\n\n", num_frozens);
+
+  printf("\tcold superblocks:\n");
+  for (i = 0; i < NUM_SIZE_CLASSES; ++i)
+    num_colds += seq_visit(tlh->cold_sbs[i], &super_block_trace);
+  printf("\t\t->Sum up to %d:\n\n", num_colds);
+
+  printf("\tHot superblocks:\n");
+  for (i = 0; i < NUM_SIZE_CLASSES; ++i)
+    num_hot += seq_visit(tlh->hot_sbs[i], &super_block_trace);
+  printf("\t\t->Sum up to %d:\n\n", num_hot);
+
+  printf("\tWarm superblocks:\n");
+  for (i = 0; i < NUM_SIZE_CLASSES; ++i)
+    num_warms += seq_visit(tlh->warm_sbs[i], &super_block_trace);
+  printf("\t\t->Sum up to %d:\n\n", num_warms);
 }

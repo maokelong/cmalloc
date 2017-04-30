@@ -55,4 +55,14 @@ static inline void *seq_dequeue(seq_queue_head *queue) {
   *queue = *(void **)old_head;
   return old_head;
 }
+
+static inline int seq_visit(seq_queue_head queue,
+                            void (*trace)(seq_queue_head queue)) {
+  int num_elems;
+  for (num_elems = 0; queue != NULL; queue = *(void **)queue, num_elems++)
+    if (trace)
+      trace(queue);
+  return num_elems;
+}
+
 #endif // end of SDS_INL_H

@@ -97,6 +97,12 @@ static inline void *sc_chain_dequeue(queue_head *queue) {
  * 计数的(count) 队列
  *******************************************/
 
+static inline uint32_t counted_num_elems(queue_head *queue) {
+  unsigned long long head;
+  head = queue->head;
+  return ABA_COUNT(head) >> ABA_ADDR_BIT;
+}
+
 static inline void *counted_enqueue(queue_head *queue, void *elem) {
   unsigned long long old_head, new_head, prev;
   do {

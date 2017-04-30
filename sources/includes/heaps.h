@@ -109,6 +109,9 @@ struct global_pool_ {
 void global_pool_init(void);
 void rev_addr_hashset_init(void);
 
+// 验证
+int global_pool_check_addr(void *addr);
+
 // 池分配
 thread_local_heap *global_pool_allocate_heap(void);
 void global_pool_deallocate_heap(thread_local_heap *tlh);
@@ -117,7 +120,7 @@ void global_pool_deallocate_heap(thread_local_heap *tlh);
 void *thread_local_heap_allocate(thread_local_heap *tlh, int size_class);
 void thread_local_heap_deallocate(thread_local_heap *tlh, void *data_block);
 
-// 验证
-int global_pool_check_addr(void *addr);
+// trace
+void thread_local_heap_trace(thread_local_heap **pTlh);
 
 #endif // end of HEAPS_H

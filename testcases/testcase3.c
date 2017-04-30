@@ -21,6 +21,8 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  malloc_trace();
+
   // 暂停程序
   // getchar();
 

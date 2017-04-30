@@ -16,9 +16,8 @@ static inline int get_core_id(void) {
   return (result >> 24) % 8;
 }
 
-static inline void freeze_vm(void* start_addr,size_t length)
-{
-	madvise(start_addr, length, MADV_DONTNEED);
+static inline void freeze_vm(void *start_addr, size_t length) {
+  madvise(start_addr, length, MADV_DONTNEED);
 }
 
 static inline void *require_vm(void *base_addr, size_t size) {
