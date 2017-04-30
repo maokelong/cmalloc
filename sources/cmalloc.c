@@ -54,7 +54,7 @@ static void thread_init(void) {
   pthread_setspecific(KEY_DESTRUCTOR, ACTIVE);
 
   // Initialize thread pool
-  THREAD_LOCAL_HEAP = global_pool_make_raw_heap();
+  THREAD_LOCAL_HEAP = global_pool_allocate_heap();
   THREAD_STATE = INITIALIZED;
 }
 
@@ -75,13 +75,10 @@ void *malloc(size_t size) {
   if (size == 0)
     return ret;
 
-  // 初始化内存分配器
   check_init();
 
-  // 计算 size 对应的 size class
   int size_class = SizeToSizeClass(size);
 
-  // 分配内存
   if (likely(InSmallSize(size_class)))
     ret = small_malloc(size_class);
   else
@@ -94,11 +91,13 @@ void free(void *ptr) {
   if (ptr == NULL)
     return;
 
-  if (ptr < GLOBAL_POOL.data_pool.pool_start ||
-      ptr > GLOBAL_POOL.data_pool.pool_end)
-    ;
-  else
+  if (global_pool_check_addr(ptr)) {
     thread_local_heap_deallocate(THREAD_LOCAL_HEAP, ptr);
+    return;
+  }
+
+  // ERROR: invalid address
+  ;
 }
 
 int mallopt(int parameter_number, int parameter_value);

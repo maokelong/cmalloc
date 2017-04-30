@@ -12,8 +12,6 @@
 
 extern const size_t MAX_TINY_CLASSES;
 extern const size_t STEP_TINY_CLASSES;
-
-// 定义 Medium Class 的最大值及递增步长
 extern const size_t MAX_MEDIUM_CLASSES;
 
 bool InSmallSize(int size_class);

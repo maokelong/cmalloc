@@ -1,5 +1,5 @@
 /*
-  测试解除虚拟地址-物理地址映射，从而获得更多物理内存
+    测试解除虚拟地址-物理地址映射，从而获得更多物理内存
 */
 
 #include "../sources/includes/cmalloc.h"
@@ -29,7 +29,7 @@ int main(int argc, char *argv[]) {
     free(ptrs_recorder[num_ptrs]);
 
   // 暂停程序
-  getchar();
+  // getchar();
 
   return 0;
 }

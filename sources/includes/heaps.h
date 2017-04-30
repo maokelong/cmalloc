@@ -83,6 +83,8 @@ struct global_meta_pool_ {
   volatile void *pool_start;
   volatile void *pool_end;
   volatile void *pool_clean;
+
+  // dropped routine(may be used in future)
   mc_queue_head reusable_sbs[NUM_SIZE_CLASSES + 1];
   mc_queue_head *reusable_heaps; // dynamic array
 };
@@ -108,13 +110,14 @@ void global_pool_init(void);
 void rev_addr_hashset_init(void);
 
 // 池分配
-thread_local_heap *global_pool_make_raw_heap(void);
+thread_local_heap *global_pool_allocate_heap(void);
 void global_pool_deallocate_heap(thread_local_heap *tlh);
 
 // 堆分配
-void *thread_local_heap_allocate(thread_local_heap *tlh,
-                                            int size_class);
-void thread_local_heap_deallocate(thread_local_heap *tlh,
-                                             void *data_block);
+void *thread_local_heap_allocate(thread_local_heap *tlh, int size_class);
+void thread_local_heap_deallocate(thread_local_heap *tlh, void *data_block);
+
+// 验证
+int global_pool_check_addr(void *addr);
 
 #endif // end of HEAPS_H

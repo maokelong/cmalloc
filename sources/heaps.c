@@ -21,10 +21,10 @@ super_meta_block_allocate_freed_shadow(super_meta_block *smb);
 static inline void *
 super_meta_block_allocate_clean_shadow(super_meta_block *smb);
 
-static inline void super_block_assemble(thread_local_heap *tlh,
-                                        super_meta_block *raw_smb,
-                                        super_data_block *raw_sdb,
-                                        int size_class);
+static inline super_meta_block *super_block_assemble(thread_local_heap *tlh,
+                                                     super_meta_block *raw_smb,
+                                                     super_data_block *raw_sdb,
+                                                     int size_class);
 static inline void super_block_init_cached(thread_local_heap *tlh,
                                            super_meta_block *smb,
                                            int size_class);
@@ -49,32 +49,34 @@ void super_block_convert_life_cycle(thread_local_heap *tlh,
 global_pool GLOBAL_POOL;
 static inline void global_meta_pool_init(void);
 static inline void global_data_pool_init(void);
-static inline bool global_pool_check_addr(void *addr);
 static inline super_meta_block *global_pool_make_raw_smb(int size_class);
 static inline void **global_pool_make_dynamic_array(size_t array_size);
+static inline thread_local_heap *global_pool_make_raw_heap(void);
 static inline super_data_block *global_pool_make_raw_sdb(void);
 static inline super_meta_block **global_pool_make_raw_rah(void);
+static inline thread_local_heap *global_pool_make_new_heap(void);
 static inline super_meta_block *global_pool_make_new_sb(thread_local_heap *tlh,
                                                         int size_class);
 static inline super_meta_block *
 global_pool_fetch_cached_sb(thread_local_heap *tlh, int size_class);
-static inline super_meta_block *global_pool_fetch_cached_or_make_new_sb(thread_local_heap *tlh,
-                                                        int size_class);
+static inline super_meta_block *
+global_pool_fetch_cached_or_make_new_sb(thread_local_heap *tlh, int size_class);
+static inline thread_local_heap *global_pool_fetch_cached_heap(void);
 
 /* thread local heap */
 static inline void thread_local_heap_init(thread_local_heap *tlh);
 static inline super_meta_block *thread_local_heap_get_sb(thread_local_heap *tlh,
                                                          int size_class);
 static inline super_meta_block *
-thread_local_heap_fetch_cached_hot_sb(thread_local_heap *tlh, int size_class);
+thread_local_heap_load_cached_hot_sb(thread_local_heap *tlh, int size_class);
 static inline super_meta_block *
-thread_local_heap_fetch_cached_cold_sb(thread_local_heap *tlh, int size_class);
+thread_local_heap_load_cached_cold_sb(thread_local_heap *tlh, int size_class);
 static inline super_meta_block *
 thread_local_heap_fetch_and_flush_cool_sb(thread_local_heap *tlh,
                                           int size_class);
 static inline super_meta_block *
-thread_local_heap_fetch_cached_or_new_frozen_sb(thread_local_heap *tlh,
-                                                int size_class);
+thread_local_heap_load_cached_or_request_new_frozen_sb(thread_local_heap *tlh,
+                                                       int size_class);
 
 /*******************************************
  * @ Definition
@@ -135,10 +137,10 @@ super_meta_block_allocate_clean_shadow(super_meta_block *smb) {
  * @ Object :superblock (sb)
  *******************************************/
 
-static inline void super_block_assemble(thread_local_heap *tlh,
-                                        super_meta_block *raw_smb,
-                                        super_data_block *raw_sdb,
-                                        int size_class) {
+static inline super_meta_block *super_block_assemble(thread_local_heap *tlh,
+                                                     super_meta_block *raw_smb,
+                                                     super_data_block *raw_sdb,
+                                                     int size_class) {
   // init the raw super meta block first
   seq_queue_init(&raw_smb->prev_sb);
   sc_queue_init(&raw_smb->prev_cool_sb);
@@ -150,13 +152,15 @@ static inline void super_block_assemble(thread_local_heap *tlh,
   sc_queue_init(&raw_smb->remote_freed_blocks);
   raw_smb->clean_zone = (void *)raw_smb + sizeof(super_meta_block);
   raw_smb->size_class = size_class;
-  raw_smb->cur_cycle = cold;
+  raw_smb->cur_cycle = frozen;
 
   // Establish the link between the raw_smb and the raw_sdb
   // by recording the address of the super data block on the super meta block
   // and updating the reverse addressing hashset.
   raw_smb->own_sdb = raw_sdb;
   rev_addr_hashset_update(raw_smb, raw_sdb);
+
+  return raw_smb;
 }
 
 static inline void super_block_init_cached(thread_local_heap *tlh,
@@ -172,7 +176,7 @@ static inline void super_block_init_cached(thread_local_heap *tlh,
   sc_queue_init(&smb->remote_freed_blocks);
   smb->clean_zone = (void *)smb + sizeof(super_meta_block);
   smb->size_class = size_class;
-  smb->cur_cycle = cold;
+  smb->cur_cycle = frozen;
 }
 
 static inline void *super_block_data_to_shadow(void *data_block) {
@@ -209,8 +213,6 @@ static inline void *super_block_allocate_data_block(thread_local_heap *tlh,
   if (shadowb == NULL)
     shadowb = super_meta_block_allocate_clean_shadow(smb);
 
-  smb->num_allocated_and_remote_blocks++;
-
   // check weather need to convert current superblock's life cycle
   super_block_check_life_cycle_and_update_counter_when_malloc(tlh, smb);
 
@@ -222,7 +224,7 @@ static inline bool super_block_satisfy_frozen(thread_local_heap *tlh,
   // Since the number of liquild superblocks held by the thread local heap is
   // too small,
   // we will not try to freeze any of these liquild superblocks.
-  if (!tlh->num_liquid_sbs)
+  if (tlh->num_liquid_sbs == 0)
     return false;
 
   // Else, if the superblock satisfies the characteristics of cold
@@ -243,8 +245,9 @@ static inline bool super_block_satisfy_cold(super_meta_block *sb) {
 static inline bool super_block_satisfy_hot(super_meta_block *sb) {
   // We think that a superblock that could allocate datablock is a hot
   // superblock
-  return sb->num_allocated_and_remote_blocks <
-         SizeClassToNumDataBlocks(sb->size_class);
+  return sb->num_allocated_and_remote_blocks != 0 &&
+         sb->num_allocated_and_remote_blocks <
+             SizeClassToNumDataBlocks(sb->size_class);
 }
 
 static inline bool super_block_satisfy_warm(super_meta_block *sb) {
@@ -263,12 +266,12 @@ void super_block_check_life_cycle_and_update_counter_when_malloc(
     // frozen -> warm ?
     if (super_block_satisfy_warm(sb)) {
       super_block_convert_life_cycle(tlh, sb, warm);
-      tlh->num_liquid_sbs--;
+      tlh->num_liquid_sbs++;
     }
     // frozen -> hot ?
     else if (super_block_satisfy_hot(sb)) {
       super_block_convert_life_cycle(tlh, sb, hot);
-      tlh->num_liquid_sbs--;
+      tlh->num_liquid_sbs++;
     }
     break;
   case cold:
@@ -390,7 +393,7 @@ static inline void global_meta_pool_init(void) {
       GLOBAL_POOL.meta_pool.pool_start + LENGTH_META_POOL;
   GLOBAL_POOL.meta_pool.reusable_heaps =
       (mc_queue_head *)global_pool_make_dynamic_array(sizeof(mc_queue_head) *
-                                                       num_cores);
+                                                      num_cores);
   for (i = 0; i < num_cores; ++i)
     mc_queue_init(&GLOBAL_POOL.meta_pool.reusable_heaps[i]);
   for (i = 0; i < NUM_SIZE_CLASSES; ++i)
@@ -405,22 +408,22 @@ static inline void global_data_pool_init(void) {
       GLOBAL_POOL.data_pool.pool_start + LENGTH_DATA_POOL;
 }
 
-static inline bool global_pool_check_addr(void *addr) {
+int global_pool_check_addr(void *addr) {
   // check if the given address is valid,
   // i.e. either within the global meta pool or the global data pool
   if ((addr >= GLOBAL_POOL.meta_pool.pool_start &&
-          addr <= GLOBAL_POOL.meta_pool.pool_end) ||
+       addr <= GLOBAL_POOL.meta_pool.pool_end) ||
       (addr >= GLOBAL_POOL.data_pool.pool_start &&
-          addr <= GLOBAL_POOL.data_pool.pool_end))
-    return true;
+       addr <= GLOBAL_POOL.data_pool.pool_end))
+    return 1;
   else
-    return false;
+    return 0;
 }
 
 static inline super_meta_block *global_pool_make_raw_smb(int size_class) {
   // get the address of the global meta pool's start address,
   // and compute the size of a thread local heap
-	volatile void **gmpool_start_addr = &GLOBAL_POOL.meta_pool.pool_clean;
+  volatile void **gmpool_start_addr = &GLOBAL_POOL.meta_pool.pool_clean;
   size_t smb_size = super_meta_block_size_class_to_size(size_class);
 
   // atomicly fetch and increase the start address of the global meta pool
@@ -433,13 +436,13 @@ static inline void **global_pool_make_dynamic_array(size_t array_size) {
   volatile void **gmpool_start_addr = &GLOBAL_POOL.meta_pool.pool_clean;
 
   // atomicly fetch and increase the start address of the global meta pool
-  return __sync_fetch_and_add(gmpool_start_addr, array_size);
+  return (void **)__sync_fetch_and_add(gmpool_start_addr, array_size);
 }
 
-thread_local_heap *global_pool_make_raw_heap(void) {
+static inline thread_local_heap *global_pool_make_raw_heap(void) {
   // get the address of the global meta pool's start address,
   // and compute the size of a thread local heap
-	volatile void **gmpool_start_addr = &GLOBAL_POOL.meta_pool.pool_clean;
+  volatile void **gmpool_start_addr = &GLOBAL_POOL.meta_pool.pool_clean;
   size_t heap_size = sizeof(thread_local_heap);
 
   // atomicly fetch and increase the start address of the global meta pool
@@ -449,7 +452,7 @@ thread_local_heap *global_pool_make_raw_heap(void) {
 
 static inline super_data_block *global_pool_make_raw_sdb(void) {
   // get the address of the global data pool's start address
-	volatile void **gdpool_start_addr = &GLOBAL_POOL.data_pool.pool_clean;
+  volatile void **gdpool_start_addr = &GLOBAL_POOL.data_pool.pool_clean;
 
   // atomicly fetch and increase the start address of the global data pool
   return (super_data_block *)__sync_fetch_and_add(gdpool_start_addr, SIZE_SDB);
@@ -457,11 +460,23 @@ static inline super_data_block *global_pool_make_raw_sdb(void) {
 
 static inline super_meta_block **global_pool_make_raw_rah(void) {
   // get the address of the global meta pool's start address
-	volatile void **gmpool_start_addr = &GLOBAL_POOL.meta_pool.pool_clean;
+  volatile void **gmpool_start_addr = &GLOBAL_POOL.meta_pool.pool_clean;
 
   // atomicly fetch and increase the start address of the global meta pool
   return (super_meta_block **)__sync_fetch_and_add(gmpool_start_addr,
                                                    LENGTH_REV_ADDR_HASHSET);
+}
+
+static inline thread_local_heap *global_pool_make_new_heap(void) {
+  thread_local_heap *tlh = NULL;
+  // try to make a raw heap
+  tlh = global_pool_make_raw_heap();
+
+  // init the heap
+  if (tlh != NULL)
+    thread_local_heap_init(tlh);
+
+  return tlh;
 }
 
 static inline super_meta_block *global_pool_make_new_sb(thread_local_heap *tlh,
@@ -478,7 +493,7 @@ static inline super_meta_block *global_pool_make_new_sb(thread_local_heap *tlh,
 
   // assemble the raw super meta block and the raw super data block
   // into a new superblock
-  super_block_assemble(tlh, raw_smb, raw_sdb, size_class);
+  new_sb = super_block_assemble(tlh, raw_smb, raw_sdb, size_class);
 
   return new_sb;
 }
@@ -492,13 +507,15 @@ global_pool_fetch_cached_sb(thread_local_heap *tlh, int size_class) {
       &GLOBAL_POOL.meta_pool.reusable_sbs[size_class], 0);
 
   // init the cached sb
-  super_block_init_cached(tlh, cached_sb, size_class);
+  if (cached_sb != NULL)
+    super_block_init_cached(tlh, cached_sb, size_class);
 
   return cached_sb;
 }
 
-static inline super_meta_block *global_pool_fetch_cached_or_make_new_sb(thread_local_heap *tlh,
-                                                        int size_class) {
+static inline super_meta_block *
+global_pool_fetch_cached_or_make_new_sb(thread_local_heap *tlh,
+                                        int size_class) {
   super_meta_block *sb = NULL;
 
   // try to fetch a superblock cached on the global pool.
@@ -508,6 +525,37 @@ static inline super_meta_block *global_pool_fetch_cached_or_make_new_sb(thread_l
     sb = global_pool_make_new_sb(tlh, size_class);
 
   return sb;
+}
+
+static inline thread_local_heap *global_pool_fetch_cached_heap(void) {
+  thread_local_heap *cached_heap;
+  mc_queue_head *cached_heaps_head;
+  int core_id;
+
+  // clues to cached heaps
+  core_id = get_core_id();
+  cached_heaps_head = &GLOBAL_POOL.meta_pool.reusable_heaps[core_id];
+
+  // try to fetch a cached heap
+  cached_heap = mc_dequeue(cached_heaps_head, 0);
+
+  // try to update its owner thread
+  if (cached_heap != NULL)
+    cached_heap->hold_thread = pthread_self();
+
+  return cached_heap;
+}
+
+thread_local_heap *global_pool_allocate_heap(void) {
+  thread_local_heap *tlh = NULL;
+
+  // try to fetch
+  tlh = global_pool_fetch_cached_heap();
+
+  if (tlh == NULL)
+    tlh = global_pool_make_new_heap();
+
+  return tlh;
 }
 
 void global_pool_deallocate_heap(thread_local_heap *tlh) {
@@ -523,10 +571,10 @@ void global_pool_deallocate_heap(thread_local_heap *tlh) {
 static inline void thread_local_heap_init(thread_local_heap *tlh) {
   int i;
   for (i = 0; i < NUM_SIZE_CLASSES; ++i) {
-    seq_queue_init(tlh->cold_sbs[i]);
-    seq_queue_init(tlh->warm_sbs[i]);
-    seq_queue_init(tlh->hot_sbs[i]);
-    seq_queue_init(tlh->frozen_sbs[i]);
+    seq_queue_init(&tlh->cold_sbs[i]);
+    seq_queue_init(&tlh->warm_sbs[i]);
+    seq_queue_init(&tlh->hot_sbs[i]);
+    seq_queue_init(&tlh->frozen_sbs[i]);
     mc_queue_init(&tlh->cool_sbs[i]);
   }
 
@@ -537,20 +585,17 @@ static inline void thread_local_heap_init(thread_local_heap *tlh) {
 }
 
 void *thread_local_heap_allocate(thread_local_heap *tlh, int size_class) {
-  void *ret = NULL;
   super_meta_block *sb = NULL;
 
   // get a available superblock from the thread local heap.
   sb = thread_local_heap_get_sb(tlh, size_class);
 
-  if (sb == NULL)
-    // ERROR: OOM
-    ;
-
   // get a available data block form the superblock.
-  ret = super_block_allocate_data_block(tlh, sb);
+  if (sb != NULL)
+    return super_block_allocate_data_block(tlh, sb);
 
-  return ret;
+  // ERROR: OOM
+  return NULL;
 }
 
 static inline super_meta_block *thread_local_heap_get_sb(thread_local_heap *tlh,
@@ -558,11 +603,11 @@ static inline super_meta_block *thread_local_heap_get_sb(thread_local_heap *tlh,
   super_meta_block *sb = NULL;
 
   // try to fetch a hot superblock within the tlh.
-  sb = thread_local_heap_fetch_cached_hot_sb(tlh, size_class);
+  sb = thread_local_heap_load_cached_hot_sb(tlh, size_class);
 
   // try to fetch a cold superblock within the tlh.
   if (sb == NULL)
-    sb = thread_local_heap_fetch_cached_cold_sb(tlh, size_class);
+    sb = thread_local_heap_load_cached_cold_sb(tlh, size_class);
 
   // try to fetch a cool superblock within the tlh,
   // and flush all the remote free memory into the local free list
@@ -572,22 +617,23 @@ static inline super_meta_block *thread_local_heap_get_sb(thread_local_heap *tlh,
   // try to fetch a frozen superblock within the tlh,
   // If failed, request raw memory from the global pool.
   if (sb == NULL)
-    sb = thread_local_heap_fetch_cached_or_new_frozen_sb(tlh, size_class);
+    sb =
+        thread_local_heap_load_cached_or_request_new_frozen_sb(tlh, size_class);
 
   return sb;
 }
 
 static inline super_meta_block *
-thread_local_heap_fetch_cached_hot_sb(thread_local_heap *tlh, int size_class) {
+thread_local_heap_load_cached_hot_sb(thread_local_heap *tlh, int size_class) {
   super_meta_block *hot_sb = NULL;
-  hot_sb = seq_dequeue(&tlh->hot_sbs[size_class]);
+  hot_sb = tlh->hot_sbs[size_class];
   return hot_sb;
 }
 
 static inline super_meta_block *
-thread_local_heap_fetch_cached_cold_sb(thread_local_heap *tlh, int size_class) {
+thread_local_heap_load_cached_cold_sb(thread_local_heap *tlh, int size_class) {
   super_meta_block *cold_sb = NULL;
-  cold_sb = seq_dequeue(&tlh->cold_sbs[size_class]);
+  cold_sb = tlh->cold_sbs[size_class];
   return cold_sb;
 }
 
@@ -600,7 +646,7 @@ thread_local_heap_fetch_and_flush_cool_sb(thread_local_heap *tlh,
   if (cool_sb != NULL) {
     // Get the head pointer of the remote free list
     // and the number of remote freed datablocks
-    uint32_t num_remote_freed_blocks;
+    uint32_t num_remote_freed_blocks = 0;
     void *remote_freed_list;
     remote_freed_list = counted_chain_dequeue(&cool_sb->remote_freed_blocks,
                                               &num_remote_freed_blocks);
@@ -629,13 +675,13 @@ thread_local_heap_fetch_and_flush_cool_sb(thread_local_heap *tlh,
 }
 
 static inline super_meta_block *
-thread_local_heap_fetch_cached_or_new_frozen_sb(thread_local_heap *tlh,
-                                                int size_class) {
+thread_local_heap_load_cached_or_request_new_frozen_sb(thread_local_heap *tlh,
+                                                       int size_class) {
   super_meta_block *frozen_sb = NULL;
   frozen_sb = seq_dequeue(&tlh->frozen_sbs[size_class]);
 
   if (frozen_sb == NULL)
-    global_pool_fetch_cached_or_make_new_sb(tlh, size_class);
+    frozen_sb = global_pool_fetch_cached_or_make_new_sb(tlh, size_class);
 
   return frozen_sb;
 }
