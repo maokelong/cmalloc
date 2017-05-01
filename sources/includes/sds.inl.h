@@ -1,7 +1,12 @@
 #ifndef SDS_INL_H
 #define SDS_INL_H
-/* Places new_node at the front of the list. */
+static inline void double_list_init(void *node) {
+  double_list_elem *elem_node = (double_list_elem *)node;
+  elem_node->next = NULL;
+  elem_node->prev = NULL;
+}
 
+/* Places new_node at the front of the list. */
 static inline void double_list_insert_front(void *new_node, double_list *list) {
   double_list_elem *elem_new = (double_list_elem *)new_node;
   double_list_elem *old_head = list->head;
@@ -40,6 +45,17 @@ static inline void double_list_remove(void *node, double_list *list) {
   }
 }
 
+static inline int double_list_visit(double_list *list,
+                                    void (*trace)(void *elem)) {
+  int num_elems = 0;
+
+  double_list_elem *elem_head = list->head;
+  for (; elem_head != NULL; elem_head = elem_head->next, num_elems++)
+    if (trace)
+      trace((void *)elem_head);
+  return num_elems;
+}
+
 static inline void seq_queue_init(seq_queue_head *queue) { *queue = NULL; }
 
 static inline void seq_enqueue(seq_queue_head *queue, void *element) {
@@ -56,12 +72,11 @@ static inline void *seq_dequeue(seq_queue_head *queue) {
   return old_head;
 }
 
-static inline int seq_visit(seq_queue_head queue,
-                            void (*trace)(seq_queue_head queue)) {
+static inline int seq_visit(seq_queue_head queue, void (*trace)(void *elem)) {
   int num_elems;
   for (num_elems = 0; queue != NULL; queue = *(void **)queue, num_elems++)
     if (trace)
-      trace(queue);
+      trace((void *)queue);
   return num_elems;
 }
 

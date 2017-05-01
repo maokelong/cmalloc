@@ -44,7 +44,10 @@ struct shadow_block_ {
 
 // 超级元数据块描述符
 struct super_meta_block_ {
-  seq_queue_head prev_sb;
+  union {
+    seq_queue_head prev_sb;
+    double_list_elem dl_elem;
+  } list_elem;
   sc_queue_head prev_cool_sb;
   thread_local_heap *owner_tlh;
   int num_allocated_and_remote_blocks;
@@ -64,18 +67,19 @@ struct super_meta_block_ {
 // 线程本地堆定义
 struct thread_local_heap_ {
   cache_aligned mc_queue_head freed_list;
-  seq_queue_head hot_sbs[NUM_SIZE_CLASSES + 1];
-  seq_queue_head warm_sbs[NUM_SIZE_CLASSES + 1];
-  seq_queue_head cold_sbs[NUM_SIZE_CLASSES + 1];
-  seq_queue_head frozen_sbs[NUM_SIZE_CLASSES + 1];
-  sc_queue_head cool_sbs[NUM_SIZE_CLASSES + 1];
+  seq_queue_head hot_sbs[NUM_SIZE_CLASSES];
+  double_list warm_sbs[NUM_SIZE_CLASSES];
+  seq_queue_head cold_sbs[NUM_SIZE_CLASSES];
+  seq_queue_head frozen_sbs[NUM_SIZE_CLASSES];
+  sc_queue_head cool_sbs[NUM_SIZE_CLASSES];
 
-  size_t num_cold_sbs;
-  size_t num_liquid_sbs;
-  pthread_t hold_thread;
+  size_t num_cold_sbs[NUM_SIZE_CLASSES];
+  size_t num_liquid_sbs[NUM_SIZE_CLASSES];
+
+  pthread_t holder_thread;
 };
 /*******************************************
-                                全局池
+                                                                全局池
 ********************************************/
 
 // 全局元数据池描述符

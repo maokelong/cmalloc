@@ -10,5 +10,6 @@ int main(int argc, char *argv[]) {
     int *ptr = (int *)malloc(1);
     printf("%d\t%p\n", i, ptr);
   }
+  malloc_trace();
   return 0;
 }
