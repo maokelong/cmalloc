@@ -11,6 +11,16 @@ void *malloc(size_t size);
 void *realloc(void *ptr, size_t size);
 
 /*Additional functions*/
+/*
+ * parameter_number:
+ * - 0: to change the ratio of cold superblocks to liquid superblocks.
+        0: freeze most empty(cold) superblocks
+        100: dont freeze any empty(cold) superblocks
+        less may save more memory
+ * - 1: to change the ratio of frozen superblocks to liquid superblocks.\
+        0: return most frozen superblosk to the global pool
+        less may save more memory for more metadata reusing.
+*/
 int mallopt(int parameter_number, int parameter_value);
 void malloc_trace(void);
 

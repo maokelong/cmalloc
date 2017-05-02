@@ -254,9 +254,9 @@ static inline void *super_block_allocate_data_block(thread_local_heap *tlh,
 
 static inline bool super_block_satisfy_frozen(thread_local_heap *tlh,
                                               super_meta_block *sb) {
-  // Since the number of liquild superblocks held by the thread local heap is
+  // Since the number of liquid superblocks held by the thread local heap is
   // too small,
-  // we will not try to freeze any of these liquild superblocks.
+  // we will not try to freeze any of these liquid superblocks.
   if (tlh->num_liquid_sbs == 0)
     return false;
 
@@ -266,10 +266,10 @@ static inline bool super_block_satisfy_frozen(thread_local_heap *tlh,
   // we will freeze the superblock.
   int size_class = sb->size_class;
   int num_cold = tlh->num_cold_sbs[size_class];
-  int num_liquild = tlh->num_liquid_sbs[size_class];
-  int ratio_cold_liquild = num_cold * 100 / num_liquild;
+  int num_liquid = tlh->num_liquid_sbs[size_class];
+  int ratio_cold_liquid = num_cold * 100 / num_liquid;
   return super_block_satisfy_cold(sb) &&
-         (ratio_cold_liquild > MAX_RATIO_COLD_LIQUID);
+         (ratio_cold_liquid > getRatioColdLiquid());
 }
 
 static inline bool
@@ -279,12 +279,12 @@ super_block_satisfy_return_to_global_pool(thread_local_heap *tlh,
   // if the thread local heap holds to many frozen blocks
   // for load balancing
   int size_class = sb->size_class;
-  int num_liquild = tlh->num_liquid_sbs[size_class];
+  int num_liquid = tlh->num_liquid_sbs[size_class];
   int num_frozen = tlh->num_frozen_sbs[size_class];
 
-  int ratio_frozen_liquild = num_frozen * 100 / num_liquild;
+  int ratio_frozen_liquid = num_frozen * 100 / num_liquid;
   return super_block_satisfy_frozen(tlh, sb) &&
-         (ratio_frozen_liquild > MAX_RATIO_FROZEN_LIQUID);
+         (ratio_frozen_liquid > getRatioFrozenLiquid());
 }
 
 static inline bool super_block_satisfy_cold(super_meta_block *sb) {

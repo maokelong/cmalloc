@@ -101,6 +101,26 @@ void free(void *ptr) {
                  "invalid address");
 }
 
-int mallopt(int parameter_number, int parameter_value);
+int mallopt(int parameter_number, int parameter_value) {
+  switch (parameter_number) {
+  case 0:
+    if (parameter_value < 0)
+      error_and_exit("CMalloc: Error at %s:%d %s.\n", __FILE__, __LINE__,
+                     "invalid paramteter value.");
+    setRatioColdLiquid(parameter_value);
+    break;
+  case 1:
+    if (parameter_value < 0)
+      error_and_exit("CMalloc: Error at %s:%d %s.\n", __FILE__, __LINE__,
+                     "invalid paramteter value.");
+    setRatioFrozenLiquid(parameter_value);
+    break;
+  default:
+    error_and_exit("CMalloc: Error at %s:%d %s.\n", __FILE__, __LINE__,
+                   "invalid paramteter number.");
+    return -1;
+  }
+  return 0;
+}
 
 void malloc_trace(void) { thread_local_heap_trace(&THREAD_LOCAL_HEAP); }

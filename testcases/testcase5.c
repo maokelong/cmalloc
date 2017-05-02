@@ -7,6 +7,7 @@
 #include "../sources/includes/globals.h"
 #include "../sources/includes/size_classes.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 #define NUM_SBS 100
 #define REQUEST_SIZE_CLASS 0
@@ -16,6 +17,9 @@ int main(int argc, char *argv[]) {
   int num_ptrs = 0;
   int *ptrs_recorder[NUM_SBS * SIZE_SDB /
                      SizeClassToBlockSize(REQUEST_SIZE_CLASS)];
+
+  if (argc == 2)
+    setRatioColdLiquid(atoi(argv[1]));
 
   // 申请并覆写 100 个 superblock
   for (i = 0; i < NUM_SBS; ++i) {

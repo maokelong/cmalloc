@@ -31,8 +31,8 @@
 #define LENGTH_REV_ADDR_HASHSET (size_t)256 TB / SIZE_SDB * sizeof(void *)
 #define STARTA_ADDR_META_POOL (void *)0x600000000000
 #define STARTA_ADDR_DATA_POOL (void *)0x700000000000
-#define MAX_RATIO_COLD_LIQUID 10
-#define MAX_RATIO_FROZEN_LIQUID MAX_RATIO_COLD_LIQUID
+#define MACRO_MAX_RATIO_COLD_LIQUID 10
+#define MACRO_MAX_RATIO_FROZEN_LIQUID MACRO_MAX_RATIO_COLD_LIQUID
 
 /*******************************************
      * 宏（函数编程）
@@ -61,5 +61,11 @@ typedef unsigned long long ptr_t;
 #define ABA_COUNT_ONE (1L << ABA_ADDR_BIT)
 #define ABA_ADDR(e) ((void *)((ptr_t)(e)&ABA_ADDR_MASK))
 #define ABA_COUNT(e) ((ptr_t)(e)&ABA_COUNT_MASK)
+
+int getRatioColdLiquid(void);
+int getRatioFrozenLiquid(void);
+
+void setRatioColdLiquid(int percentage);
+void setRatioFrozenLiquid(int percentage);
 
 #endif // end of DEFS_H
