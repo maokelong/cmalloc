@@ -15,9 +15,8 @@ const size_t STEP_TINY_CLASSES = 16;
 // 定义 Medium Class 的最大值及递增步长
 const size_t MAX_MEDIUM_CLASSES = 65536;
 
-/*******************************************
- * 内联微函数定义
- *******************************************/
+static int BLOCK_SIZE[NUM_SIZE_CLASSES];
+static int NUM_BLOCKS[NUM_SIZE_CLASSES];
 
 // 是否处于 tiny class
 static inline bool InTinyClasses(size_t size) {
@@ -47,10 +46,6 @@ static inline size_t Power(size_t x, size_t y) {
   return sum;
 }
 
-/*******************************************
- * 函数定义
- *******************************************/
-
 // 计算以 2 为底的对数(64位)
 // code from:
 // http://stackoverflow.com/questions/11376288/fast-computing-of-log2-for-64-bit-integers）
@@ -72,9 +67,19 @@ static int log2_64(uint64_t value) {
   return tab64[((uint64_t)((value - (value >> 1)) * 0x07EDD5E59A4E28C2)) >> 58];
 }
 
-/*******************************************
- * 全局函数定义
- *******************************************/
+void SizeClassInit(void) {
+  int i;
+  for (i = 0; i < NUM_SIZE_CLASSES; ++i) {
+    // size class to block size
+    if (i < NumTinyClasses())
+      BLOCK_SIZE[i] = (i + 1) * 16;
+    else
+      BLOCK_SIZE[i] = MAX_TINY_CLASSES * Power(2, i + 1 - NumTinyClasses());
+
+    // size class to num blocks
+    NUM_BLOCKS[i] = SIZE_SDB / BLOCK_SIZE[i];
+  }
+}
 
 bool InSmallSize(int size_class) { return size_class <= NUM_SIZE_CLASSES; }
 
@@ -92,13 +97,7 @@ int SizeToSizeClass(size_t size) {
   return -1;
 }
 
-// 将 Size Class 转换为 Block Size
-size_t SizeClassToBlockSize(int size_class) {
-  if (size_class < NumTinyClasses())
-    return (size_class + 1) * 16;
-  else
-    return MAX_TINY_CLASSES * Power(2, size_class + 1 - NumTinyClasses());
-}
+size_t SizeClassToBlockSize(int size_class) { return BLOCK_SIZE[size_class]; }
 
 // 将 size 转换为 block size
 size_t SizeToBLockSize(size_t size) {
@@ -115,5 +114,5 @@ size_t SizeToBLockSize(size_t size) {
 }
 
 size_t SizeClassToNumDataBlocks(int size_class) {
-  return SIZE_SDB / SizeClassToBlockSize(size_class);
+  return NUM_BLOCKS[size_class];
 }

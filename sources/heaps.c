@@ -1,4 +1,5 @@
 #include "includes/heaps.h"
+#include "includes/assert.h"
 #include "includes/cds.inl.h"
 #include "includes/sds.inl.h"
 #include "includes/size_classes.h"
@@ -188,6 +189,8 @@ static inline super_meta_block *super_block_assemble(thread_local_heap *tlh,
   raw_smb->own_sdb = raw_sdb;
   rev_addr_hashset_update(raw_smb, raw_sdb);
 
+  tlh->num_frozen_sbs[size_class]++;
+
   return raw_smb;
 }
 
@@ -195,8 +198,9 @@ static inline void super_block_init_cached(thread_local_heap *tlh,
                                            super_meta_block *smb,
                                            int size_class) {
   // init the cached super meta block
-  double_list_init(smb);
+  double_list_init((void *)smb);
   seq_queue_init((seq_queue_head *)smb);
+  mc_queue_init((mc_queue_head *)smb);
   sc_queue_init(&smb->prev_cool_sb);
   smb->owner_tlh = tlh;
   smb->num_allocated_and_remote_blocks = 0;
@@ -268,6 +272,21 @@ static inline bool super_block_satisfy_frozen(thread_local_heap *tlh,
          (ratio_cold_liquild > MAX_RATIO_COLD_LIQUID);
 }
 
+static inline bool
+super_block_satisfy_return_to_global_pool(thread_local_heap *tlh,
+                                          super_meta_block *sb) {
+  // we will return the superblock to the global pool
+  // if the thread local heap holds to many frozen blocks
+  // for load balancing
+  int size_class = sb->size_class;
+  int num_liquild = tlh->num_liquid_sbs[size_class];
+  int num_frozen = tlh->num_frozen_sbs[size_class];
+
+  int ratio_frozen_liquild = num_frozen * 100 / num_liquild;
+  return super_block_satisfy_frozen(tlh, sb) &&
+         (ratio_frozen_liquild > MAX_RATIO_FROZEN_LIQUID);
+}
+
 static inline bool super_block_satisfy_cold(super_meta_block *sb) {
   // We think that a superblock does not allocate any datablock is a cold
   // superblock,
@@ -301,11 +320,13 @@ static inline void super_block_check_life_cycle_and_update_counter_when_malloc(
     if (super_block_satisfy_warm(sb)) {
       super_block_convert_life_cycle(tlh, sb, warm);
       tlh->num_liquid_sbs[size_class]++;
+      tlh->num_frozen_sbs[size_class]--;
     }
     // frozen -> hot ?
     else if (super_block_satisfy_hot(sb)) {
       super_block_convert_life_cycle(tlh, sb, hot);
       tlh->num_liquid_sbs[size_class]++;
+      tlh->num_frozen_sbs[size_class]--;
     }
     break;
   case cold:
@@ -326,18 +347,8 @@ static inline void super_block_check_life_cycle_and_update_counter_when_malloc(
       super_block_convert_life_cycle(tlh, sb, warm);
     break;
   case warm:
-    // warm -> frozen ?
-    if (super_block_satisfy_frozen(tlh, sb)) {
-      super_block_convert_life_cycle(tlh, sb, frozen);
-      tlh->num_liquid_sbs[size_class]--;
-    }
-    // warm -> cold ?
-    else if (super_block_satisfy_cold(sb)) {
-      super_block_convert_life_cycle(tlh, sb, cold);
-      tlh->num_cold_sbs[size_class]++;
-    }
     // warm -> hot ?
-    else if (super_block_satisfy_hot(sb))
+    if (super_block_satisfy_hot(sb))
       super_block_convert_life_cycle(tlh, sb, hot);
     break;
   }
@@ -356,6 +367,7 @@ static inline void super_block_check_life_cycle_and_update_counter_when_free(
     if (super_block_satisfy_frozen(tlh, sb)) {
       super_block_convert_life_cycle(tlh, sb, frozen);
       tlh->num_liquid_sbs[size_class]--;
+      tlh->num_frozen_sbs[size_class]++;
     }
     // hot -> cold ?
     else if (super_block_satisfy_cold(sb)) {
@@ -368,6 +380,7 @@ static inline void super_block_check_life_cycle_and_update_counter_when_free(
     if (super_block_satisfy_frozen(tlh, sb)) {
       super_block_convert_life_cycle(tlh, sb, frozen);
       tlh->num_liquid_sbs[size_class]--;
+      tlh->num_frozen_sbs[size_class]++;
     }
     // warm -> frozen ?
     else if (super_block_satisfy_cold(sb)) {
@@ -415,10 +428,18 @@ void super_block_convert_life_cycle(thread_local_heap *tlh,
     sb->cur_cycle = cold;
     break;
   case frozen:
-    seq_enqueue(&tlh->frozen_sbs[sb->size_class], sb);
-    sb->cur_cycle = frozen;
-
     freeze_vm(sb->own_sdb, SIZE_SDB);
+
+    if (super_block_satisfy_return_to_global_pool(tlh, sb)) {
+      mc_queue_head *reusable_list;
+      int sc = sb->size_class;
+      reusable_list = &GLOBAL_POOL.meta_pool.reusable_sbs[get_core_id()][sc];
+      tlh->num_frozen_sbs[sb->size_class]--;
+      mc_enqueue(reusable_list, sb, 0);
+    } else {
+      seq_enqueue(&tlh->frozen_sbs[sb->size_class], sb);
+      sb->cur_cycle = frozen;
+    }
     break;
   }
 }
@@ -456,7 +477,7 @@ static inline size_t global_meta_pool_index_sdb(void *sdb) {
 }
 
 static inline void global_meta_pool_init(void) {
-  int i, num_cores = get_num_cores();
+  int i, j, num_cores = get_num_cores();
   GLOBAL_POOL.meta_pool.pool_start =
       require_vm(STARTA_ADDR_META_POOL, LENGTH_META_POOL);
   GLOBAL_POOL.meta_pool.pool_clean = GLOBAL_POOL.meta_pool.pool_start;
@@ -465,10 +486,16 @@ static inline void global_meta_pool_init(void) {
   GLOBAL_POOL.meta_pool.reusable_heaps =
       (mc_queue_head *)global_pool_make_dynamic_array(sizeof(mc_queue_head) *
                                                       num_cores);
+  for (i = 0; i < NUM_SIZE_CLASSES; ++i)
+    GLOBAL_POOL.meta_pool.reusable_sbs[i] =
+        (mc_queue_head *)global_pool_make_dynamic_array(sizeof(mc_queue_head) *
+                                                        num_cores);
+
   for (i = 0; i < num_cores; ++i)
     mc_queue_init(&GLOBAL_POOL.meta_pool.reusable_heaps[i]);
-  for (i = 0; i < NUM_SIZE_CLASSES; ++i)
-    mc_queue_init(&GLOBAL_POOL.meta_pool.reusable_sbs[i]);
+  for (i = 0; i < num_cores; ++i)
+    for (j = 0; j < NUM_SIZE_CLASSES; ++j)
+      mc_queue_init(&GLOBAL_POOL.meta_pool.reusable_sbs[i][j]);
 }
 
 static inline void global_data_pool_init(void) {
@@ -494,48 +521,46 @@ int global_pool_check_addr(void *addr) {
 static inline super_meta_block *global_pool_make_raw_smb(int size_class) {
   // get the address of the global meta pool's start address,
   // and compute the size of a thread local heap
-  volatile void **gmpool_start_addr = &GLOBAL_POOL.meta_pool.pool_clean;
   size_t smb_size = super_meta_block_size_class_to_size(size_class);
 
   // atomicly fetch and increase the start address of the global meta pool
-  return (super_meta_block *)__sync_fetch_and_add(gmpool_start_addr, smb_size);
+  return (super_meta_block *)__sync_fetch_and_add(
+      &GLOBAL_POOL.meta_pool.pool_clean, smb_size);
 }
 
 static inline void **global_pool_make_dynamic_array(size_t array_size) {
   // get the address of the global meta pool's start address,
   // and compute the size of a thread local heap
-  volatile void **gmpool_start_addr = &GLOBAL_POOL.meta_pool.pool_clean;
 
   // atomicly fetch and increase the start address of the global meta pool
-  return (void **)__sync_fetch_and_add(gmpool_start_addr, array_size);
+  return (void **)__sync_fetch_and_add(&GLOBAL_POOL.meta_pool.pool_clean,
+                                       array_size);
 }
 
 static inline thread_local_heap *global_pool_make_raw_heap(void) {
   // get the address of the global meta pool's start address,
   // and compute the size of a thread local heap
-  volatile void **gmpool_start_addr = &GLOBAL_POOL.meta_pool.pool_clean;
   size_t heap_size = sizeof(thread_local_heap);
 
   // atomicly fetch and increase the start address of the global meta pool
-  return (thread_local_heap *)__sync_fetch_and_add(gmpool_start_addr,
-                                                   heap_size);
+  return (thread_local_heap *)__sync_fetch_and_add(
+      &GLOBAL_POOL.meta_pool.pool_clean, heap_size);
 }
 
 static inline super_data_block *global_pool_make_raw_sdb(void) {
   // get the address of the global data pool's start address
-  volatile void **gdpool_start_addr = &GLOBAL_POOL.data_pool.pool_clean;
 
   // atomicly fetch and increase the start address of the global data pool
-  return (super_data_block *)__sync_fetch_and_add(gdpool_start_addr, SIZE_SDB);
+  return (super_data_block *)__sync_fetch_and_add(
+      &GLOBAL_POOL.data_pool.pool_clean, SIZE_SDB);
 }
 
 static inline super_meta_block **global_pool_make_raw_rah(void) {
   // get the address of the global meta pool's start address
-  volatile void **gmpool_start_addr = &GLOBAL_POOL.meta_pool.pool_clean;
 
   // atomicly fetch and increase the start address of the global meta pool
-  return (super_meta_block **)__sync_fetch_and_add(gmpool_start_addr,
-                                                   LENGTH_REV_ADDR_HASHSET);
+  return (super_meta_block **)__sync_fetch_and_add(
+      &GLOBAL_POOL.meta_pool.pool_clean, LENGTH_REV_ADDR_HASHSET);
 }
 
 static inline thread_local_heap *global_pool_make_new_heap(void) {
@@ -573,9 +598,17 @@ static inline super_meta_block *
 global_pool_fetch_cached_sb(thread_local_heap *tlh, int size_class) {
   super_meta_block *cached_sb = NULL;
 
-  // fetch a sb cached on the global pool
+  // fetch a sb cached on the global pool(same core)
   cached_sb = (super_meta_block *)mc_dequeue(
-      &GLOBAL_POOL.meta_pool.reusable_sbs[size_class], 0);
+      &GLOBAL_POOL.meta_pool.reusable_sbs[get_core_id()][size_class], 0);
+
+  // fetch a sb(all cores)
+  int i;
+  if (cached_sb == NULL)
+    for (i = 0; i < get_num_cores(); ++i)
+      if ((cached_sb = (super_meta_block *)mc_dequeue(
+               &GLOBAL_POOL.meta_pool.reusable_sbs[i][size_class], 0)) != NULL)
+        break;
 
   // init the cached sb
   if (cached_sb != NULL)
@@ -594,6 +627,9 @@ global_pool_fetch_cached_or_make_new_sb(thread_local_heap *tlh,
 
   if (sb == NULL)
     sb = global_pool_make_new_sb(tlh, size_class);
+
+  if (sb != NULL)
+    seq_enqueue(&tlh->frozen_sbs[size_class], sb);
 
   return sb;
 }
@@ -649,6 +685,7 @@ static inline void thread_local_heap_init(thread_local_heap *tlh) {
     sc_queue_init(&tlh->cool_sbs[i]);
     tlh->num_cold_sbs[i] = 0;
     tlh->num_liquid_sbs[i] = 0;
+    tlh->num_frozen_sbs[i] = 0;
   }
 
   mc_queue_init(&tlh->freed_list);
@@ -665,7 +702,8 @@ void *thread_local_heap_allocate(thread_local_heap *tlh, int size_class) {
   if (sb != NULL)
     return super_block_allocate_data_block(tlh, sb);
 
-  // ERROR: OOM
+  error_and_exit("CMalloc: Error at %s:%d %s.\n", __FILE__, __LINE__,
+                 "all virtual address held by cmalloc is exhausted");
   return NULL;
 }
 
@@ -750,7 +788,7 @@ static inline super_meta_block *
 thread_local_heap_load_cached_or_request_new_frozen_sb(thread_local_heap *tlh,
                                                        int size_class) {
   super_meta_block *frozen_sb = NULL;
-  frozen_sb = seq_dequeue(&tlh->frozen_sbs[size_class]);
+  frozen_sb = tlh->frozen_sbs[size_class];
 
   if (frozen_sb == NULL)
     frozen_sb = global_pool_fetch_cached_or_make_new_sb(tlh, size_class);
@@ -809,4 +847,6 @@ void thread_local_heap_trace(thread_local_heap **pTlh) {
   for (i = 0; i < NUM_SIZE_CLASSES; ++i)
     num_warms += double_list_visit(&tlh->warm_sbs[i], &super_block_trace);
   printf("\t\t-> Sum up to: %d\n\n", num_warms);
+  printf("\t-> Sum up to: %d\n\n",
+         num_frozens + num_colds + num_hot + num_warms);
 }

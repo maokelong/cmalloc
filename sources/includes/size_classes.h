@@ -14,6 +14,7 @@ extern const size_t MAX_TINY_CLASSES;
 extern const size_t STEP_TINY_CLASSES;
 extern const size_t MAX_MEDIUM_CLASSES;
 
+void SizeClassInit(void);
 bool InSmallSize(int size_class);
 int SizeToSizeClass(size_t size);
 size_t SizeToBLockSize(size_t size);

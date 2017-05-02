@@ -45,10 +45,11 @@ struct shadow_block_ {
 // 超级元数据块描述符
 struct super_meta_block_ {
   union {
-    seq_queue_head prev_sb;
-    double_list_elem dl_elem;
+    seq_queue_head prev_sb;              // tlh: hot/cold/frozen
+    double_list_elem dl_elem;            // tlh: warm
+    cache_aligned mc_queue_head mc_elem; // global pool:
   } list_elem;
-  sc_queue_head prev_cool_sb;
+  sc_queue_head prev_cool_sb; // tlh: cool
   thread_local_heap *owner_tlh;
   int num_allocated_and_remote_blocks;
   void *end_addr;
@@ -75,12 +76,13 @@ struct thread_local_heap_ {
 
   size_t num_cold_sbs[NUM_SIZE_CLASSES];
   size_t num_liquid_sbs[NUM_SIZE_CLASSES];
+  size_t num_frozen_sbs[NUM_SIZE_CLASSES];
 
   pthread_t holder_thread;
 };
 /*******************************************
-                                                                全局池
-********************************************/
+ * 全局池
+ *******************************************/
 
 // 全局元数据池描述符
 struct global_meta_pool_ {
@@ -88,9 +90,10 @@ struct global_meta_pool_ {
   volatile void *pool_end;
   volatile void *pool_clean;
 
-  // dropped routine(may be used in future)
-  mc_queue_head reusable_sbs[NUM_SIZE_CLASSES + 1];
-  mc_queue_head *reusable_heaps; // dynamic array
+  // reusable_heaps[core id]
+  mc_queue_head *reusable_heaps;
+  // reusable_sbs[size class][core id]
+  mc_queue_head *reusable_sbs[NUM_SIZE_CLASSES];
 };
 
 // 全局数据池描述符

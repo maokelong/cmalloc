@@ -1,4 +1,5 @@
 #include "includes/cmalloc.h"
+#include "includes/assert.h"
 #include "includes/heaps.h"
 #include "includes/size_classes.h"
 
@@ -43,7 +44,7 @@ static void global_init(void) {
   // Register the destructor
   pthread_key_create(&KEY_DESTRUCTOR, (void *)thread_exit);
 
-  // Init inner datastructures
+  SizeClassInit();
   global_pool_init();
   rev_addr_hashset_init();
   GLOBAL_STATE = INITIALIZED;
@@ -96,8 +97,8 @@ void free(void *ptr) {
     return;
   }
 
-  // ERROR: invalid address
-  ;
+  error_and_exit("CMalloc: Error at %s:%d %s.\n", __FILE__, __LINE__,
+                 "invalid address");
 }
 
 int mallopt(int parameter_number, int parameter_value);

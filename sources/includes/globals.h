@@ -31,7 +31,8 @@
 #define LENGTH_REV_ADDR_HASHSET (size_t)256 TB / SIZE_SDB * sizeof(void *)
 #define STARTA_ADDR_META_POOL (void *)0x600000000000
 #define STARTA_ADDR_DATA_POOL (void *)0x700000000000
-#define MAX_RATIO_COLD_LIQUID 80
+#define MAX_RATIO_COLD_LIQUID 10
+#define MAX_RATIO_FROZEN_LIQUID MAX_RATIO_COLD_LIQUID
 
 /*******************************************
      * 宏（函数编程）
