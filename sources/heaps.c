@@ -212,6 +212,12 @@ static inline void super_block_init_cached(thread_local_heap *tlh,
   smb->cur_cycle = frozen;
 }
 
+int super_block_data_to_size_class(void *addr) {
+  super_meta_block *smb = rev_addr_hashset_db_to_smb(addr);
+  int size_class = smb->size_class;
+  return size_class;
+}
+
 static inline void *super_block_data_to_shadow(void *data_block) {
   super_meta_block *smb = rev_addr_hashset_db_to_smb(data_block);
   size_t offset_data_block = (size_t)data_block - (size_t)smb->own_sdb;
@@ -479,7 +485,7 @@ static inline size_t global_meta_pool_index_sdb(void *sdb) {
 static inline void global_meta_pool_init(void) {
   int i, j, num_cores = get_num_cores();
   GLOBAL_POOL.meta_pool.pool_start =
-      require_vm(STARTA_ADDR_META_POOL, LENGTH_META_POOL);
+      request_vm(STARTA_ADDR_META_POOL, LENGTH_META_POOL);
   GLOBAL_POOL.meta_pool.pool_clean = GLOBAL_POOL.meta_pool.pool_start;
   GLOBAL_POOL.meta_pool.pool_end =
       GLOBAL_POOL.meta_pool.pool_start + LENGTH_META_POOL;
@@ -500,7 +506,7 @@ static inline void global_meta_pool_init(void) {
 
 static inline void global_data_pool_init(void) {
   GLOBAL_POOL.data_pool.pool_start =
-      require_vm(STARTA_ADDR_DATA_POOL, LENGTH_DATA_POOL);
+      request_vm(STARTA_ADDR_DATA_POOL, LENGTH_DATA_POOL);
   GLOBAL_POOL.data_pool.pool_clean = GLOBAL_POOL.data_pool.pool_start;
   GLOBAL_POOL.data_pool.pool_end =
       GLOBAL_POOL.data_pool.pool_start + LENGTH_DATA_POOL;
@@ -849,4 +855,41 @@ void thread_local_heap_trace(thread_local_heap **pTlh) {
   printf("\t\t-> Sum up to: %d\n\n", num_warms);
   printf("\t-> Sum up to: %d\n\n",
          num_frozens + num_colds + num_hot + num_warms);
+}
+
+/*******************************************
+* @ Definition
+* @ About the life cycle
+*******************************************/
+
+size_t large_block_aligned_size(size_t ori_size) {
+  return PAGE_ROUNDUP(ori_size + sizeof(large_block_header));
+}
+
+large_block_header *large_block_init(void *raw_ptr, size_t size) {
+  large_block_header *head = (large_block_header *)(raw_ptr);
+
+  head->size = size;
+  head->mem = head + sizeof(large_block_header);
+
+  return head;
+}
+
+large_block_header *large_block_get_header(void *usr_ptr) {
+  large_block_header *header;
+  header = (large_block_header *)(usr_ptr - sizeof(large_block_header));
+  return header;
+}
+
+void *large_block_allocate(size_t size) {
+  size_t alloc_size = large_block_aligned_size(size);
+
+  void *raw_vm = request_vm(NULL, alloc_size);
+
+  return large_block_init(raw_vm, alloc_size)->mem;
+}
+
+void large_block_deallocate(void *usr_ptr) {
+  size_t size = large_block_get_header(usr_ptr)->size;
+  release_vm(usr_ptr, size);
 }

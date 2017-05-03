@@ -2,7 +2,6 @@
 #define CMALLOC_H
 
 #include <unistd.h>
-/*Standard (ISO)  functions:*/
 
 void *aligned_alloc(size_t alignment, size_t size);
 void *calloc(size_t nmemb, size_t size);
@@ -10,7 +9,11 @@ void free(void *ptr);
 void *malloc(size_t size);
 void *realloc(void *ptr, size_t size);
 
-/*Additional functions*/
+void *memalign(size_t boundary, size_t size);
+int posix_memalign(void **memptr, size_t alignment, size_t size);
+void *valloc(size_t size);
+void *pvalloc(size_t size);
+
 /*
  * parameter_number:
  * - 0: to change the ratio of cold superblocks to liquid superblocks.
