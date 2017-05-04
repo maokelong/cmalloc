@@ -33,7 +33,7 @@ define link_rule
 endef
 
 LIBS = libcmalloc.la
-libcmalloc_OBJS = $(subst .c,.lo,$(wildcard *.c)) new_delete.lo
+libcmalloc_OBJS = $(subst .c,.lo,$(wildcard *.c))
 
 %.lo: %.c
 	$(call compile_rule)
