@@ -6,7 +6,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-
 /*******************************************
  * Global definations
  *******************************************/
@@ -172,7 +171,9 @@ void *realloc(void *ptr, size_t size) {
 
 void *memalign(size_t boundary, size_t size) {
   /* Deal with zero-size allocation */
-  size += (size == 0);
+  if (size == 0)
+    return NULL;
+
   if (boundary <= 256 && size <= 65536) {
     /* In this case, we handle it as small allocations */
     int boundary_cls = SizeToSizeClass(boundary);

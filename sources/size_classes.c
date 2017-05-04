@@ -1,7 +1,6 @@
 #include "includes/size_classes.h"
 #include "includes/globals.h"
 #include <math.h>
-#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -89,12 +88,8 @@ int SizeToSizeClass(size_t size) {
   if (InTinyClasses(size))
     return (size + MaskTinyStep()) / STEP_TINY_CLASSES - 1;
 
-  // 处理中型尺寸(257-65536)
-  if (InMediumClasses(size))
-    return log2_64(size - 1) - log2_64(MAX_TINY_CLASSES) + NumTinyClasses();
-
-  // 其余尺寸（0 或 65536+）
-  return -1;
+  // 处理中型尺寸(257-)
+   return log2_64(size - 1) - log2_64(MAX_TINY_CLASSES) + NumTinyClasses();
 }
 
 size_t SizeClassToBlockSize(int size_class) { return BLOCK_SIZE[size_class]; }

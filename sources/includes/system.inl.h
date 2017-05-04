@@ -1,9 +1,10 @@
 #ifndef STORAGE_H
 #define STORAGE_H
-#include <sys/mman.h>
 #include <linux/mman.h>
+#include <sys/mman.h>
 #include <sys/sysinfo.h>
 #include <unistd.h>
+
 
 static inline int get_num_cores(void) { return get_nprocs(); }
 
@@ -29,14 +30,14 @@ static inline void *request_vm(void *base_addr, size_t size) {
     munmap(base_addr, size);
     return NULL;
   }
-  if(ret == MAP_FAILED)
-	  error_and_exit("CMalloc: Error at %s:%d %s.\n", __FILE__, __LINE__,
-		  "failed in requesting memory from OS.");
+  if (ret == MAP_FAILED)
+    error_and_exit("CMalloc: Error at %s:%d %s.\n", __FILE__, __LINE__,
+                   "failed in requesting memory from OS.");
   return ret;
 }
 
 static inline int release_vm(void *start_addr, size_t length) {
-	return munmap(start_addr, length);
+  return munmap(start_addr, length);
 }
 
 static inline void *require_nvm(void *file_name, void *base_addr, size_t size) {

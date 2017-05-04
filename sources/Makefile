@@ -1,6 +1,6 @@
 CFLAGS += -O3 -Wstrict-prototypes -fomit-frame-pointer -g3 -Wall
 libdir = /usr/lib
-LDFLAGS += -lpthread -rpath $(libdir) -version-info 1
+LDFLAGS += -pthread -rpath $(libdir) -version-info 1
 CC = gcc
 CXX = g++
 LD = ld
