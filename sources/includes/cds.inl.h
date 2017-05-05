@@ -8,9 +8,9 @@
 /*******************************************
  * 多消费者(Multi-Consumer) LIFO 队列
  *******************************************/
-inline void mc_queue_init(queue_head *queue) { queue->head = 0; }
+static inline void mc_queue_init(queue_head *queue) { queue->head = 0; }
 
-inline void mc_enqueue(queue_head *queue, void *element, int next_off) {
+static inline void mc_enqueue(queue_head *queue, void *element, int next_off) {
   unsigned long long old_head;
   unsigned long long new_head;
 
