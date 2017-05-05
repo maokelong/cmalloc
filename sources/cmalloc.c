@@ -133,6 +133,7 @@ void *realloc(void *ptr, size_t size) {
 
   if (size == 0) {
     free(ptr);
+    return NULL;
   }
 
   // check if ptr is on the tlh

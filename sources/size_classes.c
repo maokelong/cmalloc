@@ -80,7 +80,7 @@ void SizeClassInit(void) {
   }
 }
 
-bool InSmallSize(int size_class) { return size_class <= NUM_SIZE_CLASSES; }
+bool InSmallSize(int size_class) { return size_class < NUM_SIZE_CLASSES; }
 
 // 将 size 转换为 size class
 int SizeToSizeClass(size_t size) {
@@ -89,7 +89,7 @@ int SizeToSizeClass(size_t size) {
     return (size + MaskTinyStep()) / STEP_TINY_CLASSES - 1;
 
   // 处理中型尺寸(257-)
-   return log2_64(size - 1) - log2_64(MAX_TINY_CLASSES) + NumTinyClasses();
+  return log2_64(size - 1) - log2_64(MAX_TINY_CLASSES) + NumTinyClasses();
 }
 
 size_t SizeClassToBlockSize(int size_class) { return BLOCK_SIZE[size_class]; }

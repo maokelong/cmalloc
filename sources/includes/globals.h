@@ -65,7 +65,7 @@ typedef unsigned long long ptr_t;
 int getRatioColdLiquid(void);
 int getRatioFrozenLiquid(void);
 
-void setRatioColdLiquid(int percentage);
-void setRatioFrozenLiquid(int percentage);
+void setRatioColdLiquid(int ratio);
+void setRatioFrozenLiquid(int ratio);
 
 #endif // end of DEFS_H
