@@ -64,7 +64,7 @@ pintool_print_cpy = $(testcase_srcs:.c=.pinout)# 保存 pintool 执行结果的�
 pin_wget_src = http://software.intel.com/sites/landingpage/pintool/downloads/pin-2.14-71313-gcc.4.4.7-linux.tar.gz
 
 # 指定编译选项
-CFLAGS += -O3 -Wstrict-prototypes -g3 -Wall -pthread -fomit-frame-pointer
+CFLAGS += -O0 -Wstrict-prototypes -g3 -Wall -pthread -fomit-frame-pointer
 CC = gcc
 
 # ==========================================================

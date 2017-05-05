@@ -606,15 +606,15 @@ global_pool_fetch_cached_sb(thread_local_heap *tlh, int size_class) {
 
   // fetch a sb cached on the global pool(same core)
   cached_sb = (super_meta_block *)mc_dequeue(
-      &GLOBAL_POOL.meta_pool.reusable_sbs[get_core_id()][size_class], 0);
+      &GLOBAL_POOL.meta_pool.reusable_sbs[size_class][get_core_id()], 0);
 
   // fetch a sb(all cores)
-  int i;
+  /* int i;
   if (cached_sb == NULL)
     for (i = 0; i < get_num_cores(); ++i)
       if ((cached_sb = (super_meta_block *)mc_dequeue(
-               &GLOBAL_POOL.meta_pool.reusable_sbs[i][size_class], 0)) != NULL)
-        break;
+               &GLOBAL_POOL.meta_pool.reusable_sbs[size_class][i], 0)) != NULL)
+        break; */
 
   // init the cached sb
   if (cached_sb != NULL)
