@@ -499,8 +499,8 @@ static inline void global_meta_pool_init(void) {
 
   for (i = 0; i < num_cores; ++i)
     mc_queue_init(&GLOBAL_POOL.meta_pool.reusable_heaps[i]);
-  for (i = 0; i < num_cores; ++i)
-    for (j = 0; j < NUM_SIZE_CLASSES; ++j)
+  for (i = 0; i < NUM_SIZE_CLASSES; ++i)
+    for (j = 0; j < num_cores; ++j)
       mc_queue_init(&GLOBAL_POOL.meta_pool.reusable_sbs[i][j]);
 }
 
