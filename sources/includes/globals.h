@@ -1,5 +1,5 @@
-#ifndef DEFS_H
-#define DEFS_H
+#ifndef CMALLOC_GLOBALS_H
+#define CMALLOC_GLOBALS_H
 /*
  * @文件名：globals.h
  *
@@ -28,7 +28,8 @@
 #define SIZE_SDB (size_t)(NUM_SDB_PAGES * PAGE_SIZE)
 #define LENGTH_DATA_POOL (size_t)(8 TB)
 #define LENGTH_META_POOL (size_t)(1 TB)
-#define LENGTH_REV_ADDR_HASHSET (size_t)256 TB / SIZE_SDB * sizeof(void *)
+#define CMALLOC_LENGTH_REV_ADDR_HASHSET                                        \
+  (size_t)256 TB / SIZE_SDB * sizeof(void *)
 #define STARTA_ADDR_META_POOL (void *)0x600000000000
 #define STARTA_ADDR_DATA_POOL (void *)0x700000000000
 #define MACRO_MAX_RATIO_COLD_LIQUID 10
@@ -44,6 +45,7 @@ typedef unsigned long long ptr_t;
 #define PAGE_ROUNDUP(x) (ROUNDUP((uintptr_t)x, PAGE_SIZE))
 #define PAGE_ROUNDDOWN(x) (ROUNDDOWN((uintptr_t)x, PAGE_SIZE))
 #define cache_aligned __attribute__((aligned(CACHE_LINE_SIZE)))
+#define LENGTH_REV_ADDR_HASHSET (size_t)256 TB / SIZE_SDB * sizeof(void *)
 #define thread_local __attribute__((tls_model("initial-exec"))) __thread
 #define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
@@ -68,4 +70,4 @@ int getRatioFrozenLiquid(void);
 void setRatioColdLiquid(int ratio);
 void setRatioFrozenLiquid(int ratio);
 
-#endif // end of DEFS_H
+#endif // end of CMALLOC_GLOBALS_H

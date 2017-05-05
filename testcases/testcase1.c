@@ -7,9 +7,9 @@
 int main(int argc, char *argv[]) {
   int i;
   for (i = 0; i < 4096; ++i) {
-    int *ptr = (int *)malloc(1);
+    int *ptr = (int *)cmalloc_malloc(1);
     printf("%d\t%p\n", i, ptr);
   }
-  malloc_trace();
+  cmalloc_trace();
   return 0;
 }

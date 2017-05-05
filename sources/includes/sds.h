@@ -1,5 +1,5 @@
-#ifndef SDS_H
-#define SDS_H
+#ifndef CMALLOC_SDS_H
+#define CMALLOC_SDS_H
 
 /*
 * @ File Name : sds.h
@@ -30,4 +30,4 @@ struct double_list_ {
  *******************************************/
 typedef void *seq_queue_head;
 
-#endif // end of SDS_H
+#endif // end of CMALLOC_SDS_H

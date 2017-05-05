@@ -1,6 +1,7 @@
 #include "includes/cmalloc.h"
 #include "includes/assert.h"
 #include "includes/heaps.h"
+#include "includes/override.h"
 #include "includes/size_classes.h"
 #include "includes/system.inl.h"
 #include <stdlib.h>
@@ -78,7 +79,7 @@ static void *large_malloc(size_t size) { return large_block_allocate(size); }
  * API implementation
  *******************************************/
 
-void *malloc(size_t size) {
+void *cmalloc_malloc(size_t size) {
   void *ret = NULL;
   if (size == 0)
     return ret;
@@ -95,7 +96,7 @@ void *malloc(size_t size) {
   return ret;
 }
 
-void free(void *ptr) {
+void cmalloc_free(void *ptr) {
   if (ptr == NULL)
     return;
 
@@ -105,15 +106,15 @@ void free(void *ptr) {
     large_free(ptr);
 }
 
-void *aligned_alloc(size_t alignment, size_t size) {
+void *cmalloc_aligned_alloc(size_t alignment, size_t size) {
   error_and_exit("CMalloc: Error at %s:%d %s.\n", __FILE__, __LINE__,
                  "aligned_alloc() called but not implemented");
   return NULL;
 }
 
-void *calloc(size_t nmemb, size_t size) {
+void *cmalloc_calloc(size_t nmemb, size_t size) {
   void *ptr;
-  ptr = malloc(nmemb * size);
+  ptr = cmalloc_malloc(nmemb * size);
   if (!ptr) {
     return NULL;
   }
@@ -125,14 +126,14 @@ void *calloc(size_t nmemb, size_t size) {
   return ptr;
 }
 
-void *realloc(void *ptr, size_t size) {
+void *cmalloc_realloc(void *ptr, size_t size) {
   if (ptr == NULL) {
-    void *ret = malloc(size);
+    void *ret = cmalloc_malloc(size);
     return ret;
   }
 
   if (size == 0) {
-    free(ptr);
+    cmalloc_free(ptr);
     return NULL;
   }
 
@@ -147,9 +148,9 @@ void *realloc(void *ptr, size_t size) {
     // request a new data block and conduct the copy oper
     size_t ori_size = SizeClassToBlockSize(new_size_class);
     size_t smaller_size = ori_size < size ? ori_size : size;
-    void *new_ptr = malloc(size);
+    void *new_ptr = cmalloc_malloc(size);
     memcpy(new_ptr, ptr, smaller_size);
-    free(ptr);
+    cmalloc_free(ptr);
 
     return new_ptr;
   } else {
@@ -162,15 +163,15 @@ void *realloc(void *ptr, size_t size) {
     // try to request a new data block & conduct the copy oper
     size_t smaller_size = ori_size < size ? ori_size : size;
 
-    void *new_ptr = malloc(size);
+    void *new_ptr = cmalloc_malloc(size);
     memcpy(new_ptr, ptr, smaller_size);
-    free(ptr);
+    cmalloc_free(ptr);
 
     return large_block_init(new_ptr, new_size)->mem;
   }
 }
 
-void *memalign(size_t boundary, size_t size) {
+void *cmalloc_memalign(size_t boundary, size_t size) {
   /* Deal with zero-size allocation */
   if (size == 0)
     return NULL;
@@ -188,8 +189,8 @@ void *memalign(size_t boundary, size_t size) {
   }
 }
 
-int posix_memalign(void **memptr, size_t alignment, size_t size) {
-  *memptr = memalign(alignment, size);
+int cmalloc_posix_memalign(void **memptr, size_t alignment, size_t size) {
+  *memptr = cmalloc_memalign(alignment, size);
   if (*memptr) {
     return 0;
   } else {
@@ -198,15 +199,17 @@ int posix_memalign(void **memptr, size_t alignment, size_t size) {
   }
 }
 
-void *valloc(size_t size) { return memalign(PAGE_SIZE, size); }
+void *cmalloc_valloc(size_t size) { return cmalloc_memalign(PAGE_SIZE, size); }
 
-void *pvalloc(size_t size) {
+void *cmalloc_pvalloc(size_t size) {
   error_and_exit("CMalloc: Error at %s:%d %s.\n", __FILE__, __LINE__,
                  "pvalloc() called but not implemented");
   return NULL;
 }
 
-int mallopt(int parameter_number, int parameter_value) {
+void cmalloc_trace(void) { thread_local_heap_trace(&THREAD_LOCAL_HEAP); }
+
+int cmalloc_mallopt(int parameter_number, int parameter_value) {
   switch (parameter_number) {
   case 0:
     if (parameter_value < 0)
@@ -227,5 +230,3 @@ int mallopt(int parameter_number, int parameter_value) {
   }
   return 0;
 }
-
-void malloc_trace(void) { thread_local_heap_trace(&THREAD_LOCAL_HEAP); }

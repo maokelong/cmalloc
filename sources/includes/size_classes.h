@@ -1,5 +1,5 @@
-#ifndef SIZE_CLASSES_H
-#define SIZE_CLASSES_H
+#ifndef CMALLOC_SIZE_CLASSES_H
+#define CMALLOC_SIZE_CLASSES_H
 
 #include <stdbool.h>
 #include <unistd.h>
@@ -20,4 +20,4 @@ int SizeToSizeClass(size_t size);
 size_t SizeToBLockSize(size_t size);
 size_t SizeClassToBlockSize(int size_class);
 size_t SizeClassToNumDataBlocks(int size_class);
-#endif // SIZE_CLASSES_H
+#endif // end of CMALLOC_SIZE_CLASSES_H

@@ -274,8 +274,7 @@ static inline bool super_block_satisfy_frozen(thread_local_heap *tlh,
   int num_cold = tlh->num_cold_sbs[size_class];
   int num_liquid = tlh->num_liquid_sbs[size_class];
   int ratio_cold_liquid = num_cold * 100 / num_liquid;
-  return super_block_satisfy_cold(sb) &&
-         (ratio_cold_liquid > getRatioColdLiquid());
+  return ratio_cold_liquid > getRatioColdLiquid();
 }
 
 static inline bool
@@ -289,8 +288,7 @@ super_block_satisfy_return_to_global_pool(thread_local_heap *tlh,
   int num_frozen = tlh->num_frozen_sbs[size_class];
 
   int ratio_frozen_liquid = num_frozen * 100 / num_liquid;
-  return super_block_satisfy_frozen(tlh, sb) &&
-         (ratio_frozen_liquid > getRatioFrozenLiquid());
+  return ratio_frozen_liquid > getRatioFrozenLiquid();
 }
 
 static inline bool super_block_satisfy_cold(super_meta_block *sb) {
@@ -303,9 +301,8 @@ static inline bool super_block_satisfy_cold(super_meta_block *sb) {
 static inline bool super_block_satisfy_hot(super_meta_block *sb) {
   // We think that a superblock that could allocate datablock is a hot
   // superblock
-  return sb->num_allocated_and_remote_blocks != 0 &&
-         sb->num_allocated_and_remote_blocks <
-             SizeClassToNumDataBlocks(sb->size_class);
+  return sb->num_allocated_and_remote_blocks <
+         SizeClassToNumDataBlocks(sb->size_class);
 }
 
 static inline bool super_block_satisfy_warm(super_meta_block *sb) {
@@ -322,33 +319,32 @@ static inline void super_block_check_life_cycle_and_update_counter_when_malloc(
   sb->num_allocated_and_remote_blocks++;
   switch (sb->cur_cycle) {
   case frozen:
-    // frozen -> warm ?
-    if (super_block_satisfy_warm(sb)) {
-      super_block_convert_life_cycle(tlh, sb, warm);
-      tlh->num_liquid_sbs[size_class]++;
-      tlh->num_frozen_sbs[size_class]--;
-    }
     // frozen -> hot ?
-    else if (super_block_satisfy_hot(sb)) {
+    if (super_block_satisfy_hot(sb)) {
       super_block_convert_life_cycle(tlh, sb, hot);
       tlh->num_liquid_sbs[size_class]++;
       tlh->num_frozen_sbs[size_class]--;
+
+      return;
     }
+    // frozen -> warm ?
+    super_block_convert_life_cycle(tlh, sb, warm);
+    tlh->num_liquid_sbs[size_class]++;
+    tlh->num_frozen_sbs[size_class]--;
     break;
   case cold:
-    // cold -> warm ?
-    if (super_block_satisfy_warm(sb)) {
-      super_block_convert_life_cycle(tlh, sb, warm);
-      tlh->num_cold_sbs[size_class]--;
-    }
     // cold -> hot ?
-    else if (super_block_satisfy_hot(sb)) {
+    if (super_block_satisfy_hot(sb)) {
       super_block_convert_life_cycle(tlh, sb, hot);
       tlh->num_cold_sbs[size_class]--;
+
+      return;
     }
+    // cold -> warm ?
+    super_block_convert_life_cycle(tlh, sb, warm);
+    tlh->num_cold_sbs[size_class]--;
     break;
   case hot:
-    // hot -> warm ?
     if (super_block_satisfy_warm(sb))
       super_block_convert_life_cycle(tlh, sb, warm);
     break;
@@ -369,37 +365,43 @@ static inline void super_block_check_life_cycle_and_update_counter_when_free(
   case cold:
     break;
   case hot:
-    // hot -> frozen ?
-    if (super_block_satisfy_frozen(tlh, sb)) {
-      super_block_convert_life_cycle(tlh, sb, frozen);
-      tlh->num_liquid_sbs[size_class]--;
-      tlh->num_frozen_sbs[size_class]++;
-    }
     // hot -> cold ?
-    else if (super_block_satisfy_cold(sb)) {
+    if (super_block_satisfy_cold(sb)) {
+      // hot -> frozen ?
+      if (super_block_satisfy_frozen(tlh, sb)) {
+        super_block_convert_life_cycle(tlh, sb, frozen);
+        tlh->num_liquid_sbs[size_class]--;
+        tlh->num_frozen_sbs[size_class]++;
+        return;
+      }
+
       super_block_convert_life_cycle(tlh, sb, cold);
       tlh->num_cold_sbs[size_class]++;
     }
     break;
   case warm:
-    // warm -> hot ?
-    if (super_block_satisfy_frozen(tlh, sb)) {
-      super_block_convert_life_cycle(tlh, sb, frozen);
-      tlh->num_liquid_sbs[size_class]--;
-      tlh->num_frozen_sbs[size_class]++;
-    }
-    // warm -> frozen ?
-    else if (super_block_satisfy_cold(sb)) {
+    // warm -> cold ?
+    if (super_block_satisfy_cold(sb)) {
+      // warm -> frozen ?
+      if (super_block_satisfy_frozen(tlh, sb)) {
+        super_block_convert_life_cycle(tlh, sb, frozen);
+        tlh->num_liquid_sbs[size_class]--;
+        tlh->num_frozen_sbs[size_class]++;
+
+        return;
+      }
+
       super_block_convert_life_cycle(tlh, sb, cold);
       tlh->num_cold_sbs[size_class]++;
+      return;
     }
-    // warm -> cold ?
-    else if (super_block_satisfy_hot(sb)) {
-      super_block_convert_life_cycle(tlh, sb, hot);
-    }
+
+    // warm -> hot ?
+    super_block_convert_life_cycle(tlh, sb, hot);
     break;
   }
 }
+
 void super_block_convert_life_cycle(thread_local_heap *tlh,
                                     super_meta_block *sb,
                                     life_cycle target_life_cycle) {

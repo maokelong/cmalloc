@@ -26,33 +26,33 @@ int main(int argc, char *argv[]) {
     int total_mem, request_mem = SizeClassToBlockSize(REQUEST_SIZE_CLASS);
     for (total_mem = 0; total_mem + request_mem <= 65536;
          total_mem += request_mem) {
-      int *ptr = (int *)malloc(request_mem);
+      int *ptr = (int *)cmalloc_malloc(request_mem);
       ptrs_recorder[num_ptrs++] = ptr;
       for (j = 0; j < request_mem / sizeof(int); ++j)
         *(ptr + j) = 1;
     }
   }
 
-  malloc_trace();
+  cmalloc_trace();
 
   // 内存释放
   while (num_ptrs--)
-    free(ptrs_recorder[num_ptrs]);
+    cmalloc_free(ptrs_recorder[num_ptrs]);
 
-  malloc_trace();
+  cmalloc_trace();
 
   // 再次申请并覆写 100 个 superblock
   for (i = 0; i < NUM_SBS; ++i) {
     int total_mem, request_mem = SizeClassToBlockSize(REQUEST_SIZE_CLASS);
     for (total_mem = 0; total_mem + request_mem <= 65536;
          total_mem += request_mem) {
-      int *ptr = (int *)malloc(request_mem);
+      int *ptr = (int *)cmalloc_malloc(request_mem);
       for (j = 0; j < request_mem / sizeof(int); ++j)
         *(ptr + j) = 1;
     }
   }
 
-  malloc_trace();
+  cmalloc_trace();
 
   return 0;
 }

@@ -1,5 +1,5 @@
-#ifndef CDS_INL_H
-#define CDS_INL_H
+#ifndef CMALLOC_CDS_INL_H
+#define CMALLOC_CDS_INL_H
 
 #include "atomic.inl.h"
 
@@ -145,4 +145,4 @@ static inline void *counted_chain_dequeue(queue_head *queue, uint32_t *count) {
   }
 }
 
-#endif // end of CDS_INL_H
+#endif // end of CMALLOC_CDS_INL_H

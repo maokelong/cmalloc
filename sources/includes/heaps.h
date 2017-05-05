@@ -1,5 +1,5 @@
-#ifndef HEAPS_H
-#define HEAPS_H
+#ifndef CMALLOC_HEAPS_H
+#define CMALLOC_HEAPS_H
 /*
  * @文件名：heaps.h
  *
@@ -141,4 +141,4 @@ void large_block_deallocate(void *usr_ptr);
 // trace
 void thread_local_heap_trace(thread_local_heap **pTlh);
 
-#endif // end of HEAPS_H
+#endif // end of CMALLOC_HEAPS_H

@@ -24,7 +24,7 @@ void malloc_test(void) {
   gettimeofday(&start, NULL);
   int i;
   for (i = 0; i < 10000; i += 10) {
-    void *ptr = malloc(i);
+    void *ptr = cmalloc_malloc(i);
     if (ptr)
       *(int *)ptr = 1;
     gettimeofday(&end, NULL);

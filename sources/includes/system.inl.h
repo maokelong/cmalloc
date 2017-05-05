@@ -1,10 +1,9 @@
-#ifndef STORAGE_H
-#define STORAGE_H
+#ifndef CMALLOC_SYSTEM_INL_H
+#define CMALLOC_SYSTEM_INL_H
 #include <linux/mman.h>
 #include <sys/mman.h>
 #include <sys/sysinfo.h>
 #include <unistd.h>
-
 
 static inline int get_num_cores(void) { return get_nprocs(); }
 
@@ -44,4 +43,4 @@ static inline void *require_nvm(void *file_name, void *base_addr, size_t size) {
   // TODO: allocate nvm address space
   return NULL;
 }
-#endif // ! STORAGE_H
+#endif // end of CMALLOC_SYSTEM_INL_H

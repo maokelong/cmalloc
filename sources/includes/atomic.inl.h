@@ -1,5 +1,5 @@
-#ifndef __SYNCHRO_ATOMIC_H__
-#define __SYNCHRO_ATOMIC_H__
+#ifndef CMALLOC_ATOMIC_INL_H
+#define CMALLOC_ATOMIC_INL_H
 
 #define mb() asm volatile("sync" : : : "memory")
 #define LOCK_PREFIX "lock ; "
@@ -109,4 +109,4 @@ static inline unsigned long compare_and_swap_ptr(volatile void *address,
                             (unsigned long)old_ptr, (unsigned long)new_ptr);
 }
 
-#endif
+#endif // end of CMALLOC_ATOMIC_INL_H

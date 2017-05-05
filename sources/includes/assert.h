@@ -1,7 +1,7 @@
-#ifndef ASSERT_H
-#define ASSERT_H
+#ifndef CMALLOC_ASSERT_H
+#define CMALLOC_ASSERT_H
 
-#ifndef DEGUB
+#ifndef CMALLOC_DEGUB
 #define DEBUG
 #endif // ! DEGUB
 

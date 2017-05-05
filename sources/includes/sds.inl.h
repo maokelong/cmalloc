@@ -1,5 +1,5 @@
-#ifndef SDS_INL_H
-#define SDS_INL_H
+#ifndef CMALLOC_SDS_INL_H
+#define CMALLOC_SDS_INL_H
 static inline void double_list_init(void *node) {
   double_list_elem *elem_node = (double_list_elem *)node;
   elem_node->next = NULL;
@@ -80,4 +80,4 @@ static inline int seq_visit(seq_queue_head queue, void (*trace)(void *elem)) {
   return num_elems;
 }
 
-#endif // end of SDS_INL_H
+#endif // end of CMALLOC_SDS_INL_H

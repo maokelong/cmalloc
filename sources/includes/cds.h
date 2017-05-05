@@ -1,5 +1,5 @@
-#ifndef CDS_H
-#define CDS_H
+#ifndef CMALLOC_CDS_H
+#define CMALLOC_CDS_H
 
 /*
 * @文件名：csd.h
@@ -23,4 +23,4 @@ typedef queue_head counted_queue_head;
 struct queue_head_ {
   cache_aligned volatile ptr_t head;
 };
-#endif // !CDS_H
+#endif // end of CMALLOC_CDS_H
