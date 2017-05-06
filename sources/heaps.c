@@ -441,7 +441,7 @@ void super_block_convert_life_cycle(thread_local_heap *tlh,
     if (super_block_satisfy_return_to_global_pool(tlh, sb)) {
       mc_queue_head *reusable_list;
       int sc = sb->size_class;
-      reusable_list = &GLOBAL_POOL.meta_pool.reusable_sbs[get_core_id()][sc];
+      reusable_list = &GLOBAL_POOL.meta_pool.reusable_sbs[sc][get_core_id()];
       tlh->num_frozen_sbs[sb->size_class]--;
       mc_enqueue(reusable_list, sb, 0);
     } else {
@@ -514,13 +514,11 @@ static inline void global_data_pool_init(void) {
       GLOBAL_POOL.data_pool.pool_start + LENGTH_DATA_POOL;
 }
 
-int global_pool_check_addr(void *addr) {
+int global_pool_check_data_addr(void *addr) {
   // check if the given address is valid,
   // i.e. either within the global meta pool or the global data pool
-  if ((addr >= GLOBAL_POOL.meta_pool.pool_start &&
-       addr <= GLOBAL_POOL.meta_pool.pool_end) ||
-      (addr >= GLOBAL_POOL.data_pool.pool_start &&
-       addr <= GLOBAL_POOL.data_pool.pool_end))
+  if (addr >= GLOBAL_POOL.data_pool.pool_start &&
+      addr <= GLOBAL_POOL.data_pool.pool_end)
     return 1;
   else
     return 0;

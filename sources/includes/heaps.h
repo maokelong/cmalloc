@@ -123,7 +123,7 @@ struct global_pool_ {
 void global_pool_init(void);
 void rev_addr_hashset_init(void);
 
-int global_pool_check_addr(void *addr);
+int global_pool_check_data_addr(void *addr);
 int super_block_data_to_size_class(void *addr);
 size_t large_block_aligned_size(size_t ori_size);
 large_block_header *large_block_get_header(void *usr_ptr);

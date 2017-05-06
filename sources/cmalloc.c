@@ -100,7 +100,7 @@ void cmalloc_free(void *ptr) {
   if (ptr == NULL)
     return;
 
-  if (global_pool_check_addr(ptr))
+  if (global_pool_check_data_addr(ptr))
     small_free(ptr);
   else
     large_free(ptr);
@@ -138,7 +138,7 @@ void *cmalloc_realloc(void *ptr, size_t size) {
   }
 
   // check if ptr is on the tlh
-  if (global_pool_check_addr(ptr)) {
+  if (global_pool_check_data_addr(ptr)) {
     int ori_size_class = super_block_data_to_size_class(ptr);
     int new_size_class = SizeToSizeClass(size);
 
