@@ -2,9 +2,10 @@
 #include "includes/assert.h"
 #include "includes/cds.inl.h"
 #include "includes/sds.inl.h"
-#include "includes/size_classes.h"
+#include "includes/size_class.inl.h"
 #include "includes/system.inl.h"
 #include <stdbool.h>
+#include <string.h>
 #include <stdio.h>
 
 /* reverse addressing hashset */
@@ -138,12 +139,12 @@ static inline super_meta_block *rev_addr_hashset_db_to_smb(void *data_block) {
  *******************************************/
 static inline size_t super_meta_block_size_class_to_size(int size_class) {
   // size of shadow blocks + size of super meta block
-  return SIZE_SDB / SizeClassToBlockSize(size_class) * sizeof(void *) +
+  return SIZE_SDB / size_class_block_size(size_class) * sizeof(void *) +
          sizeof(super_meta_block);
 }
 
 static inline size_t super_meta_block_total_size(int size_class) {
-  return sizeof(super_meta_block) + SizeClassToNumDataBlocks(size_class);
+  return sizeof(super_meta_block) + size_class_num_blocks(size_class);
 }
 
 static inline void *
@@ -165,15 +166,30 @@ super_meta_block_allocate_clean_shadow(super_meta_block *smb) {
  * @ Object :superblock (sb)
  *******************************************/
 
+static inline void super_block_init_cached(thread_local_heap *tlh,
+                                           super_meta_block *smb,
+                                           int size_class) {
+  // init the cached super meta block
+  memset(smb, 0, sizeof(smb->list_elem));
+  smb->owner_tlh = tlh;
+
+  tlh->num_frozen_sbs[size_class]++;
+  seq_enqueue(&tlh->frozen_sbs[size_class], smb);
+}
+
 static inline super_meta_block *super_block_assemble(thread_local_heap *tlh,
                                                      super_meta_block *raw_smb,
                                                      super_data_block *raw_sdb,
                                                      int size_class) {
-  // init the raw super meta block first
-  double_list_init((void *)raw_smb);
-  seq_queue_init((seq_queue_head *)raw_smb);
+  // Establish the link between the raw_smb and the raw_sdb
+  // by recording the address of the super data block on the super meta block
+  // and updating the reverse addressing hashset.
+  raw_smb->own_sdb = raw_sdb;
+  rev_addr_hashset_update(raw_smb, raw_sdb);
+
+  super_block_init_cached(tlh, raw_smb, size_class);
+
   sc_queue_init(&raw_smb->prev_cool_sb);
-  raw_smb->owner_tlh = tlh;
   raw_smb->num_allocated_and_remote_blocks = 0;
   raw_smb->end_addr =
       (void *)raw_smb + super_meta_block_size_class_to_size(size_class);
@@ -183,33 +199,7 @@ static inline super_meta_block *super_block_assemble(thread_local_heap *tlh,
   raw_smb->size_class = size_class;
   raw_smb->cur_cycle = frozen;
 
-  // Establish the link between the raw_smb and the raw_sdb
-  // by recording the address of the super data block on the super meta block
-  // and updating the reverse addressing hashset.
-  raw_smb->own_sdb = raw_sdb;
-  rev_addr_hashset_update(raw_smb, raw_sdb);
-
-  tlh->num_frozen_sbs[size_class]++;
-
   return raw_smb;
-}
-
-static inline void super_block_init_cached(thread_local_heap *tlh,
-                                           super_meta_block *smb,
-                                           int size_class) {
-  // init the cached super meta block
-  double_list_init((void *)smb);
-  seq_queue_init((seq_queue_head *)smb);
-  mc_queue_init((mc_queue_head *)smb);
-  sc_queue_init(&smb->prev_cool_sb);
-  smb->owner_tlh = tlh;
-  smb->num_allocated_and_remote_blocks = 0;
-  smb->end_addr = (void *)smb + super_meta_block_size_class_to_size(size_class);
-  seq_queue_init(&smb->local_free_blocks);
-  sc_queue_init(&smb->remote_freed_blocks);
-  smb->clean_zone = (void *)smb + sizeof(super_meta_block);
-  smb->size_class = size_class;
-  smb->cur_cycle = frozen;
 }
 
 int super_block_data_to_size_class(void *addr) {
@@ -220,25 +210,24 @@ int super_block_data_to_size_class(void *addr) {
 
 static inline void *super_block_data_to_shadow(void *data_block) {
   super_meta_block *smb = rev_addr_hashset_db_to_smb(data_block);
-  size_t offset_data_block = (size_t)data_block - (size_t)smb->own_sdb;
-  size_t size_data_block = SizeClassToBlockSize(smb->size_class);
-  size_t sn_data_block = offset_data_block / size_data_block;
+  int size_class = smb->size_class;
 
-  void *correlated_shadow_block = (void *)smb + sizeof(super_meta_block) +
-                                  sizeof(shadow_block) * sn_data_block;
+  size_t offset_data = (size_t)data_block - (size_t)smb->own_sdb;
+  size_t offset_meta = offset_data / size_class_ratio_data_shadow(size_class);
 
-  return correlated_shadow_block;
+  // return the address of correlated shadow block
+  return (void *)smb + sizeof(super_meta_block) + offset_meta;
+  ;
 }
 
 static inline void *super_block_shadow_to_data(super_meta_block *smb,
                                                shadow_block *shadowb) {
-  // calc the serial number of given shadow block in given smb
-  size_t sn_shadow_block;
-  sn_shadow_block = ((size_t)shadowb - (size_t)smb - sizeof(super_meta_block)) /
-                    sizeof(shadow_block);
+  size_t offset_meta = (size_t)shadowb - (size_t)smb - sizeof(super_meta_block);
+  int size_class = smb->size_class;
+  size_t offset_data = offset_meta * size_class_ratio_data_shadow(size_class);
 
   // return the address of correlated data block
-  return smb->own_sdb + sn_shadow_block * SizeClassToBlockSize(smb->size_class);
+  return smb->own_sdb + offset_data;
 }
 
 static inline void *super_block_allocate_data_block(thread_local_heap *tlh,
@@ -302,7 +291,7 @@ static inline bool super_block_satisfy_hot(super_meta_block *sb) {
   // We think that a superblock that could allocate datablock is a hot
   // superblock
   return sb->num_allocated_and_remote_blocks <
-         SizeClassToNumDataBlocks(sb->size_class);
+         size_class_num_blocks(sb->size_class);
 }
 
 static inline bool super_block_satisfy_warm(super_meta_block *sb) {
@@ -310,7 +299,7 @@ static inline bool super_block_satisfy_warm(super_meta_block *sb) {
   // superblock,
   // even though it may maintain some remote freed datatblocks inside.
   return sb->num_allocated_and_remote_blocks >=
-         SizeClassToNumDataBlocks(sb->size_class);
+         size_class_num_blocks(sb->size_class);
 }
 
 static inline void super_block_check_life_cycle_and_update_counter_when_malloc(
@@ -457,7 +446,7 @@ void super_block_trace(void *elem) {
   printf("\t\tsuperblock( SN: %lu ):\n",
          global_meta_pool_index_sdb(sb->own_sdb));
   printf("\t\t\tsize calss: %d\n", sb->size_class);
-  printf("\t\t\tblock size: %lu\n", SizeClassToBlockSize(sb->size_class));
+  printf("\t\t\tblock size: %lu\n", size_class_block_size(sb->size_class));
   printf("\t\t\tlife cycle: %s\n", life_cycle_enum_to_name(sb->cur_cycle));
   printf("\t\t\tnum alloced / remotely freed: %d\n",
          sb->num_allocated_and_remote_blocks);
@@ -465,7 +454,7 @@ void super_block_trace(void *elem) {
          seq_visit(sb->local_free_blocks, NULL));
   printf("\t\t\tnum remotely freed: %d\n",
          counted_num_elems(&sb->remote_freed_blocks));
-  printf("\t\t\tnum total: %lu\n", SizeClassToNumDataBlocks(sb->size_class));
+  printf("\t\t\tnum total: %lu\n", size_class_num_blocks(sb->size_class));
   printf("\t\t\tstart addr: %p\n", sb);
   printf("\t\t\tclean addr: %p\n", sb->clean_zone);
   printf("\t\t\tend addr: %p\n", sb->end_addr);
@@ -589,9 +578,17 @@ static inline super_meta_block *global_pool_make_new_sb(thread_local_heap *tlh,
   super_meta_block *raw_smb = NULL;
   raw_smb = global_pool_make_raw_smb(size_class);
 
+  if (unlikely(raw_smb == NULL))
+    error_and_exit("CMalloc: Error at %s:%d %s.\n", __FILE__, __LINE__,
+                   "metadata's vm space has ran out.");
+
   // make a raw super data block on the global data pool
   super_data_block *raw_sdb = NULL;
   raw_sdb = global_pool_make_raw_sdb();
+
+  if (unlikely(raw_sdb == NULL))
+    error_and_exit("CMalloc: Error at %s:%d %s.\n", __FILE__, __LINE__,
+                   "data's vm space has ran out.");
 
   // assemble the raw super meta block and the raw super data block
   // into a new superblock
@@ -633,9 +630,6 @@ global_pool_fetch_cached_or_make_new_sb(thread_local_heap *tlh,
 
   if (sb == NULL)
     sb = global_pool_make_new_sb(tlh, size_class);
-
-  if (sb != NULL)
-    seq_enqueue(&tlh->frozen_sbs[size_class], sb);
 
   return sb;
 }
@@ -705,12 +699,7 @@ void *thread_local_heap_allocate(thread_local_heap *tlh, int size_class) {
   sb = thread_local_heap_get_sb(tlh, size_class);
 
   // get a available data block form the superblock.
-  if (sb != NULL)
-    return super_block_allocate_data_block(tlh, sb);
-
-  error_and_exit("CMalloc: Error at %s:%d %s.\n", __FILE__, __LINE__,
-                 "all virtual address held by cmalloc is exhausted");
-  return NULL;
+  return super_block_allocate_data_block(tlh, sb);
 }
 
 static inline super_meta_block *thread_local_heap_get_sb(thread_local_heap *tlh,
@@ -721,20 +710,21 @@ static inline super_meta_block *thread_local_heap_get_sb(thread_local_heap *tlh,
   sb = thread_local_heap_load_cached_hot_sb(tlh, size_class);
 
   // try to fetch a cold superblock within the tlh.
-  if (sb == NULL)
+  if (unlikely(sb == NULL)) {
     sb = thread_local_heap_load_cached_cold_sb(tlh, size_class);
 
-  // try to fetch a cool superblock within the tlh,
-  // and flush all the remote free memory into the local free list
-  if (sb == NULL)
-    sb = thread_local_heap_fetch_and_flush_cool_sb(tlh, size_class);
+    // try to fetch a cool superblock within the tlh,
+    // and flush all the remote free memory into the local free list
+    if (sb == NULL) {
+      sb = thread_local_heap_fetch_and_flush_cool_sb(tlh, size_class);
 
-  // try to fetch a frozen superblock within the tlh,
-  // If failed, request raw memory from the global pool.
-  if (sb == NULL)
-    sb =
-        thread_local_heap_load_cached_or_request_new_frozen_sb(tlh, size_class);
-
+      // try to fetch a frozen superblock within the tlh,
+      // If failed, request raw memory from the global pool.
+      if (likely(sb == NULL))
+        sb = thread_local_heap_load_cached_or_request_new_frozen_sb(tlh,
+                                                                    size_class);
+    }
+  }
   return sb;
 }
 
@@ -759,7 +749,7 @@ thread_local_heap_fetch_and_flush_cool_sb(thread_local_heap *tlh,
   super_meta_block *cool_sb =
       sc_dequeue(&tlh->cool_sbs[size_class], (int)sizeof(cool_sb->list_elem));
 
-  if (cool_sb != NULL) {
+  if (unlikely(cool_sb != NULL)) {
     // Get the head pointer of the remote free list
     // and the number of remote freed datablocks
     uint32_t num_remote_freed_blocks = 0;
@@ -797,7 +787,7 @@ thread_local_heap_load_cached_or_request_new_frozen_sb(thread_local_heap *tlh,
   frozen_sb = tlh->frozen_sbs[size_class];
 
   if (frozen_sb == NULL)
-    frozen_sb = global_pool_fetch_cached_or_make_new_sb(tlh, size_class);
+    frozen_sb = global_pool_make_new_sb(tlh, size_class);
 
   return frozen_sb;
 }
@@ -811,7 +801,7 @@ void thread_local_heap_deallocate(thread_local_heap *tlh, void *data_block) {
   smb = rev_addr_hashset_db_to_smb(data_block);
 
   // recycle the correlated shadow block
-  if (tlh && tlh->holder_thread == pthread_self()) {
+  if (likely(tlh && tlh->holder_thread == pthread_self())) {
     // local free routine
     seq_enqueue(&smb->local_free_blocks, correlated_shadow_block);
     super_block_check_life_cycle_and_update_counter_when_free(tlh, smb);

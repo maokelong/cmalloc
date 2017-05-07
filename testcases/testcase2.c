@@ -59,7 +59,6 @@ int main(int argc, char *argv[]) {
   for (i = 0; i < num_threads; ++i) {
     pthread_join(threads_pool[i], NULL);
   }
-  getchar();
 
   return 0;
 }

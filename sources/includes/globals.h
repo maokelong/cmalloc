@@ -23,6 +23,9 @@
 /*******************************************
  * 宏（分配器参数）
  *******************************************/
+#define STEP_TINY_CLASSES 16
+#define MAX_TINY_CLASSES 256
+#define MAX_MEDIUM_CLASSES 65536
 #define NUM_SDB_PAGES 16
 #define NUM_SIZE_CLASSES 24
 #define SIZE_SDB (size_t)(NUM_SDB_PAGES * PAGE_SIZE)
@@ -32,12 +35,12 @@
   (size_t)256 TB / SIZE_SDB * sizeof(void *)
 #define STARTA_ADDR_META_POOL (void *)0x600000000000
 #define STARTA_ADDR_DATA_POOL (void *)0x700000000000
-#define MACRO_MAX_RATIO_COLD_LIQUID 10
-#define MACRO_MAX_RATIO_FROZEN_LIQUID MACRO_MAX_RATIO_COLD_LIQUID
+#define MACRO_MAX_RATIO_COLD_LIQUID 80
+#define MACRO_MAX_RATIO_FROZEN_LIQUID MACRO_MAX_RATIO_COLD_LIQUID * 4
 
 /*******************************************
-     * 宏（函数编程）
-     *******************************************/
+ * 宏（函数编程）
+ *******************************************/
 #define ACTIVE ((void *)1)
 typedef unsigned long long ptr_t;
 #define ROUNDUP(x, n) ((x + n - 1) & (~(n - 1)))

@@ -5,7 +5,7 @@
 
 #include "../sources/includes/cmalloc.h"
 #include "../sources/includes/globals.h"
-#include "../sources/includes/size_classes.h"
+#include "../sources/includes/size_class.inl.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -13,17 +13,17 @@
 #define REQUEST_SIZE_CLASS 0
 int main(int argc, char *argv[]) {
   int i, j;
-  SizeClassInit();
+  size_class_init();
   int num_ptrs = 0;
   int *ptrs_recorder[NUM_SBS * SIZE_SDB /
-                     SizeClassToBlockSize(REQUEST_SIZE_CLASS)];
+                     size_class_block_size(REQUEST_SIZE_CLASS)];
 
   if (argc == 2)
     setRatioColdLiquid(atoi(argv[1]));
 
   // 申请并覆写 100 个 superblock
   for (i = 0; i < NUM_SBS; ++i) {
-    int total_mem, request_mem = SizeClassToBlockSize(REQUEST_SIZE_CLASS);
+    int total_mem, request_mem = size_class_block_size(REQUEST_SIZE_CLASS);
     for (total_mem = 0; total_mem + request_mem <= 65536;
          total_mem += request_mem) {
       int *ptr = (int *)cmalloc_malloc(request_mem);
@@ -43,7 +43,7 @@ int main(int argc, char *argv[]) {
 
   // 再次申请并覆写 100 个 superblock
   for (i = 0; i < NUM_SBS; ++i) {
-    int total_mem, request_mem = SizeClassToBlockSize(REQUEST_SIZE_CLASS);
+    int total_mem, request_mem = size_class_block_size(REQUEST_SIZE_CLASS);
     for (total_mem = 0; total_mem + request_mem <= 65536;
          total_mem += request_mem) {
       int *ptr = (int *)cmalloc_malloc(request_mem);

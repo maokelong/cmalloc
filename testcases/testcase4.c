@@ -3,7 +3,7 @@
 */
 
 #include "../sources/includes/cmalloc.h"
-#include "../sources/includes/size_classes.h"
+#include "../sources/includes/size_class.inl.h"
 #include <pthread.h>
 #include <stdio.h>
 
@@ -21,9 +21,9 @@ void thread_job(void) {
 int main(int argc, char *argv[]) {
   // 申请并覆写 10 个 superblock
   int i, j;
-  SizeClassInit();
+  size_class_init();
   for (i = 0; i < 10; ++i) {
-    int total_mem, request_mem = SizeClassToBlockSize(i);
+    int total_mem, request_mem = size_class_block_size(i);
     for (total_mem = 0; total_mem + request_mem <= 65536;
          total_mem += request_mem) {
       int *ptr = (int *)cmalloc_malloc(request_mem);
@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
 
   // 再次申请并覆写 10 个 superblock
   for (i = 0; i < 10; ++i) {
-    int total_mem, request_mem = SizeClassToBlockSize(i);
+    int total_mem, request_mem = size_class_block_size(i);
     for (total_mem = 0; total_mem + request_mem <= 65536;
          total_mem += request_mem) {
       int *ptr = (int *)cmalloc_malloc(request_mem);

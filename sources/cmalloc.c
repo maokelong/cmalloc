@@ -2,7 +2,7 @@
 #include "includes/assert.h"
 #include "includes/heaps.h"
 #include "includes/override.h"
-#include "includes/size_classes.h"
+#include "includes/size_class.inl.h"
 #include "includes/system.inl.h"
 #include <stdlib.h>
 #include <string.h>
@@ -39,7 +39,7 @@ static void global_init(void) {
   // Register the destructor
   pthread_key_create(&KEY_DESTRUCTOR, (void *)thread_exit);
 
-  SizeClassInit();
+  size_class_init();
   global_pool_init();
   rev_addr_hashset_init();
   GLOBAL_STATE = INITIALIZED;
@@ -54,9 +54,9 @@ static void thread_init(void) {
   THREAD_STATE = INITIALIZED;
 }
 
-inline static void check_init(void) {
+static inline void check_init(void) {
   if (unlikely(THREAD_STATE != INITIALIZED)) {
-    if (GLOBAL_STATE != INITIALIZED) {
+    if (unlikely(GLOBAL_STATE != INITIALIZED)) {
       pthread_once(&GLOBAL_INIT_ONCE_CONTROL, global_init);
     }
     thread_init();
@@ -69,11 +69,13 @@ static inline void small_free(void *ptr) {
 
 static inline void large_free(void *ptr) { large_block_deallocate(ptr); }
 
-static void *small_malloc(int size_class) {
+static inline void *small_malloc(int size_class) {
   return thread_local_heap_allocate(THREAD_LOCAL_HEAP, size_class);
 }
 
-static void *large_malloc(size_t size) { return large_block_allocate(size); }
+static inline void *large_malloc(size_t size) {
+  return large_block_allocate(size);
+}
 
 /*******************************************
  * API implementation
@@ -81,14 +83,14 @@ static void *large_malloc(size_t size) { return large_block_allocate(size); }
 
 void *cmalloc_malloc(size_t size) {
   void *ret = NULL;
-  if (size == 0)
+  if (unlikely(size == 0))
     return ret;
 
   check_init();
 
-  int size_class = SizeToSizeClass(size);
+  int size_class = size_to_size_class(size);
 
-  if (likely(InSmallSize(size_class)))
+  if (likely(size_class_in_tiny_or_medium(size_class)))
     ret = small_malloc(size_class);
   else
     ret = large_malloc(size);
@@ -97,10 +99,10 @@ void *cmalloc_malloc(size_t size) {
 }
 
 void cmalloc_free(void *ptr) {
-  if (ptr == NULL)
+  if (unlikely(ptr == NULL))
     return;
 
-  if (global_pool_check_data_addr(ptr))
+  if (likely(global_pool_check_data_addr(ptr)))
     small_free(ptr);
   else
     large_free(ptr);
@@ -140,13 +142,13 @@ void *cmalloc_realloc(void *ptr, size_t size) {
   // check if ptr is on the tlh
   if (global_pool_check_data_addr(ptr)) {
     int ori_size_class = super_block_data_to_size_class(ptr);
-    int new_size_class = SizeToSizeClass(size);
+    int new_size_class = size_to_size_class(size);
 
     if (ori_size_class == new_size_class)
       return ptr;
 
     // request a new data block and conduct the copy oper
-    size_t ori_size = SizeClassToBlockSize(new_size_class);
+    size_t ori_size = size_class_block_size(new_size_class);
     size_t smaller_size = ori_size < size ? ori_size : size;
     void *new_ptr = cmalloc_malloc(size);
     memcpy(new_ptr, ptr, smaller_size);
@@ -178,8 +180,8 @@ void *cmalloc_memalign(size_t boundary, size_t size) {
 
   if (boundary <= 256 && size <= 65536) {
     /* In this case, we handle it as small allocations */
-    int boundary_cls = SizeToSizeClass(boundary);
-    int size_cls = SizeToSizeClass(size);
+    int boundary_cls = size_to_size_class(boundary);
+    int size_cls = size_to_size_class(size);
     int alloc_cls = boundary_cls > size_cls ? boundary_cls : size_cls;
     return small_malloc(alloc_cls);
   } else {

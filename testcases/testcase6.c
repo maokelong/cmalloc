@@ -6,7 +6,7 @@
 
 #include "../sources/includes/cmalloc.h"
 #include "../sources/includes/globals.h"
-#include "../sources/includes/size_classes.h"
+#include "../sources/includes/size_class.inl.h"
 #include <stdio.h>
 #include <stdlib.h>
 
