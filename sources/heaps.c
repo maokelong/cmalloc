@@ -683,8 +683,7 @@ static inline void thread_local_heap_init(thread_local_heap *tlh) {
 #ifdef TRACE_WARM_BLOCKS
     double_list_init(&tlh->warm_sbs[i]);
 #endif
-
-    seq_queue_init(&tlh->hot_sbs[i]);
+	double_list_init(&tlh->hot_sbs[i]);
     seq_queue_init(&tlh->frozen_sbs[i]);
     sc_queue_init(&tlh->cool_sbs[i]);
     tlh->num_cold_sbs[i] = 0;
@@ -736,7 +735,7 @@ static inline super_meta_block *thread_local_heap_get_sb(thread_local_heap *tlh,
 static inline super_meta_block *
 thread_local_heap_load_cached_hot_sb(thread_local_heap *tlh, int size_class) {
   super_meta_block *hot_sb = NULL;
-  hot_sb = tlh->hot_sbs[size_class].head;
+  hot_sb = (super_meta_block*)tlh->hot_sbs[size_class].head;
   return hot_sb;
 }
 
