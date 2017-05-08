@@ -787,7 +787,7 @@ thread_local_heap_load_cached_or_request_new_frozen_sb(thread_local_heap *tlh,
   frozen_sb = tlh->frozen_sbs[size_class];
 
   if (frozen_sb == NULL)
-    frozen_sb = global_pool_make_new_sb(tlh, size_class);
+    frozen_sb = global_pool_fetch_cached_or_make_new_sb(tlh, size_class);
 
   return frozen_sb;
 }
