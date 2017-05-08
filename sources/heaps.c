@@ -397,10 +397,9 @@ void super_block_convert_life_cycle(thread_local_heap *tlh,
   // dequeue
   switch (sb->cur_cycle) {
   case hot:
-    seq_dequeue(&tlh->hot_sbs[sb->size_class]);
+    double_list_remove(sb, &tlh->hot_sbs[sb->size_class]);
     break;
   case warm:
-    double_list_remove(sb, &tlh->warm_sbs[sb->size_class]);
     break;
   case cold:
     seq_dequeue(&tlh->cold_sbs[sb->size_class]);
@@ -413,11 +412,13 @@ void super_block_convert_life_cycle(thread_local_heap *tlh,
   // enqueue
   switch (target_life_cycle) {
   case hot:
-    seq_enqueue(&tlh->hot_sbs[sb->size_class], sb);
+    double_list_insert_front(sb, &tlh->hot_sbs[sb->size_class]);
     sb->cur_cycle = hot;
     break;
   case warm:
+#ifdef TRACE_WARM_BLOCKS
     double_list_insert_front(sb, &tlh->warm_sbs[sb->size_class]);
+#endif
     sb->cur_cycle = warm;
     break;
   case cold:
@@ -679,7 +680,10 @@ static inline void thread_local_heap_init(thread_local_heap *tlh) {
   int i;
   for (i = 0; i < NUM_SIZE_CLASSES; ++i) {
     seq_queue_init(&tlh->cold_sbs[i]);
+#ifdef TRACE_WARM_BLOCKS
     double_list_init(&tlh->warm_sbs[i]);
+#endif
+
     seq_queue_init(&tlh->hot_sbs[i]);
     seq_queue_init(&tlh->frozen_sbs[i]);
     sc_queue_init(&tlh->cool_sbs[i]);
@@ -699,7 +703,8 @@ void *thread_local_heap_allocate(thread_local_heap *tlh, int size_class) {
   sb = thread_local_heap_get_sb(tlh, size_class);
 
   // get a available data block form the superblock.
-  return super_block_allocate_data_block(tlh, sb);
+  void *ret = super_block_allocate_data_block(tlh, sb);
+  return ret;
 }
 
 static inline super_meta_block *thread_local_heap_get_sb(thread_local_heap *tlh,
@@ -731,7 +736,7 @@ static inline super_meta_block *thread_local_heap_get_sb(thread_local_heap *tlh,
 static inline super_meta_block *
 thread_local_heap_load_cached_hot_sb(thread_local_heap *tlh, int size_class) {
   super_meta_block *hot_sb = NULL;
-  hot_sb = tlh->hot_sbs[size_class];
+  hot_sb = tlh->hot_sbs[size_class].head;
   return hot_sb;
 }
 
@@ -836,13 +841,14 @@ void thread_local_heap_trace(thread_local_heap **pTlh) {
 
   printf("\tHot superblocks:\n");
   for (i = 0; i < NUM_SIZE_CLASSES; ++i)
-    num_hot += seq_visit(tlh->hot_sbs[i], &super_block_trace);
+    num_hot += double_list_visit(&tlh->hot_sbs[i], &super_block_trace);
   printf("\t\t->Sum up to: %d\n\n", num_hot);
-
+#ifdef TRACE_WARM_BLOCKS
   printf("\tWarm superblocks:\n");
   for (i = 0; i < NUM_SIZE_CLASSES; ++i)
     num_warms += double_list_visit(&tlh->warm_sbs[i], &super_block_trace);
   printf("\t\t-> Sum up to: %d\n\n", num_warms);
+#endif
   printf("\t-> Sum up to: %d\n\n",
          num_frozens + num_colds + num_hot + num_warms);
 }

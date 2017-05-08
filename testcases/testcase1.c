@@ -5,11 +5,12 @@
 #include "../sources/includes/cmalloc.h"
 #include <stdio.h>
 int main(int argc, char *argv[]) {
-  int i;
+  int i,*ptr;
   for (i = 0; i < 4096; ++i) {
-    int *ptr = (int *)cmalloc_malloc(1);
+    ptr = (int *)cmalloc_malloc(1);
     printf("%d\t%p\n", i, ptr);
   }
+  cmalloc_free(ptr);
   cmalloc_trace();
   return 0;
 }

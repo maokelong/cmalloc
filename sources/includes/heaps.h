@@ -75,8 +75,10 @@ struct large_block_header_ {
 // 线程本地堆定义
 struct thread_local_heap_ {
   cache_aligned mc_queue_head freed_list;
-  seq_queue_head hot_sbs[NUM_SIZE_CLASSES];
+  double_list hot_sbs[NUM_SIZE_CLASSES];
+#ifdef TRACE_WARM_BLOCKS
   double_list warm_sbs[NUM_SIZE_CLASSES];
+#endif
   seq_queue_head cold_sbs[NUM_SIZE_CLASSES];
   seq_queue_head frozen_sbs[NUM_SIZE_CLASSES];
   sc_queue_head cool_sbs[NUM_SIZE_CLASSES];

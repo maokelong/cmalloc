@@ -41,7 +41,7 @@ int main(int argc, char *argv[]) {
   for (k = 0; k < 10; ++k)
     for (i = 0; i < 10; ++i) {
       int total_mem, request_mem = size_class_block_size(i);
-      for (total_mem = 0; total_mem + request_mem <= 65536;
+      for (total_mem = 0; total_mem + request_mem < 65536;
            total_mem += request_mem) {
         int *ptr = (int *)cmalloc_malloc(request_mem);
         for (j = 0; j < request_mem / sizeof(int); ++j)
