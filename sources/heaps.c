@@ -5,8 +5,8 @@
 #include "includes/size_class.inl.h"
 #include "includes/system.inl.h"
 #include <stdbool.h>
-#include <string.h>
 #include <stdio.h>
+#include <string.h>
 
 /* reverse addressing hashset */
 super_meta_block **REV_ADDR_HASHSET = NULL;
@@ -252,14 +252,14 @@ static inline bool super_block_satisfy_frozen(thread_local_heap *tlh,
   // Since the number of liquid superblocks held by the thread local heap is
   // too small,
   // we will not try to freeze any of these liquid superblocks.
-  if (tlh->num_liquid_sbs == 0)
+  int size_class = sb->size_class;
+  if (tlh->num_liquid_sbs[size_class] == 0)
     return false;
 
   // Else, if the superblock satisfies the characteristics of cold
   // and the ratio of cold superblocks to liquid superblocks is larger than
   // MAX_RATIO_COLD_LIQUID,
   // we will freeze the superblock.
-  int size_class = sb->size_class;
   int num_cold = tlh->num_cold_sbs[size_class];
   int num_liquid = tlh->num_liquid_sbs[size_class];
   int ratio_cold_liquid = num_cold * 100 / num_liquid;
