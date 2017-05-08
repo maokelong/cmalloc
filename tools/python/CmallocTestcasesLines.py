@@ -1,7 +1,7 @@
 import os
 
 BASE_DIR = os.path.dirname(__file__)
-REL_PATH_CMALLOC = (".." + os.sep) * 3 + "testcases"
+REL_PATH_CMALLOC = (".." + os.sep) * 2 + "testcases"
 PATH_CMALLOC = os.path.join(BASE_DIR, REL_PATH_CMALLOC)
 
 TOTAL_LINES = 0
