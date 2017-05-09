@@ -22,7 +22,7 @@ gcc src/mdist.c -o mdist
 
 
 # 计算保存数据目录的名称
-if [ !$PRELOAD ]; 
+if [ "$PRELOAD" = "" ];
 then
     PATH_DATA="data/ptmalloc2"
 else
@@ -36,7 +36,7 @@ echo "executeing mdist..."
 export LD_PRELOAD=$PRELOAD
 REQUEST_ITER=1000
 REQUEST_SIZE=2
-while [ $REQUEST_SIZE -lt 258 ]
+while [ $REQUEST_SIZE -lt 34 ]
 do
     ${PATH_PIN}pin.sh -t ${PATH_PIN}source/tools/MyPinTool/obj-intel64/${NAME_PINTOOL}.so \
         -- ./mdist $REQUEST_ITER $REQUEST_SIZE \
@@ -46,4 +46,7 @@ do
     REQUEST_SIZE=`expr $REQUEST_SIZE + 2`
 done
 export LD_PRELOAD=
+
+# 开始分析
 echo "analysising mdist..."
+python ../../tools/python/MdistAnalyzer.py

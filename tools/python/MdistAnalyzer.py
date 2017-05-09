@@ -1,3 +1,5 @@
+#!/usr/local/bin/python
+# -*- coding: utf-8 -*-
 import os
 
 # 设置保存结果的文件
@@ -11,7 +13,7 @@ PATH_BENCHDATA = os.path.join(BASE_DIR, RELA_PATH_BENCHDATA)
 
 # 递归遍历测试数据目录
 for dir_path, dirs_name, files_name in os.walk(PATH_BENCHDATA):
-    # 跳过无数据文件的目录
+    # ！ 跳过无数据文件的目录
     if len(files_name) == 0:
         continue
 
@@ -19,7 +21,7 @@ for dir_path, dirs_name, files_name in os.walk(PATH_BENCHDATA):
 
     # 迭代当前目录下所有文件
     for file_name in files_name:
-        # 跳过非法文件
+        # ! 跳过非法文件
         if not file_name.endswith(".dat"):
             continue
         source_name = os.path.join(dir_path, file_name)
