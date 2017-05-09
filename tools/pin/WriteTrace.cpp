@@ -73,12 +73,10 @@ VOID InsInstruction(INS ins, VOID *v) {
 
 /* ===================================================================== */
 VOID MemWrite(ADDRINT addr) {
-    TraceFile << "W:" << std::hex << addr << endl;
+    TraceFile << std::hex << addr << endl;
 }
 
 /* ===================================================================== */
 VOID FiniFunction(INT32 code, VOID *v) {
-  std::cout << "Program Fishished: Records will write to \"WriteTrace.out\"."
-            << endl;
   TraceFile.close();
 }
