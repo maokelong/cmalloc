@@ -46,18 +46,18 @@ struct shadow_block_ {
 // 超级元数据块描述符
 struct super_meta_block_ {
   union {
-    seq_queue_head prev_sb;              // tlh: hot/cold/frozen
-    double_list_elem dl_elem;            // tlh: warm
-    cache_aligned mc_queue_head mc_elem; // global pool:
+    seq_queue_head prev_sb;   // tlh: hot/cold/frozen
+    double_list_elem dl_elem; // tlh: warm
+    mc_queue_head mc_elem;    // global pool:
   } list_elem;
   sc_queue_head prev_cool_sb; // tlh: cool
+  counted_queue_head remote_freed_blocks;
+  cache_aligned int size_class;
   thread_local_heap *owner_tlh;
   int num_allocated_and_remote_blocks;
   void *end_addr;
   seq_queue_head local_free_blocks;
-  counted_queue_head remote_freed_blocks;
   void *clean_zone;
-  int size_class;
   life_cycle cur_cycle;
   void *own_sdb;
 };

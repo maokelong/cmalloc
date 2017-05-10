@@ -1,4 +1,5 @@
 #include "includes/heaps.h"
+#include "includes/acc_unit.inl.h"
 #include "includes/assert.h"
 #include "includes/cds.inl.h"
 #include "includes/sds.inl.h"
@@ -30,7 +31,8 @@ static inline super_meta_block *super_block_assemble(thread_local_heap *tlh,
 static inline void super_block_init_cached(thread_local_heap *tlh,
                                            super_meta_block *smb,
                                            int size_class);
-static inline void *super_block_data_to_shadow(void *data_block);
+static inline void *super_block_data_to_shadow(super_meta_block *smb,
+                                               void *data_block);
 static inline void *super_block_shadow_to_data(super_meta_block *smb,
                                                shadow_block *shadowb);
 static inline void *super_block_allocate_data_block(thread_local_heap *tlh,
@@ -208,12 +210,11 @@ int super_block_data_to_size_class(void *addr) {
   return size_class;
 }
 
-static inline void *super_block_data_to_shadow(void *data_block) {
-  super_meta_block *smb = rev_addr_hashset_db_to_smb(data_block);
-  int size_class = smb->size_class;
-
+static inline void *super_block_data_to_shadow(super_meta_block *smb,
+                                               void *data_block) {
   size_t offset_data = (size_t)data_block - (size_t)smb->own_sdb;
-  size_t offset_meta = offset_data / size_class_ratio_data_shadow(size_class);
+  int size_class = smb->size_class;
+  int offset_meta = acc_unit_offdata_to_offshadow(offset_data, size_class);
 
   // return the address of correlated shadow block
   return (void *)smb + sizeof(super_meta_block) + offset_meta;
@@ -565,8 +566,11 @@ static inline thread_local_heap *global_pool_make_new_heap(void) {
   tlh = global_pool_make_raw_heap();
 
   // init the heap
-  if (tlh != NULL)
-    thread_local_heap_init(tlh);
+  if (unlikely(tlh == NULL))
+    error_and_exit("CMalloc: Error at %s:%d %s.\n", __FILE__, __LINE__,
+                   "metadata's vm space has ran out.");
+
+  thread_local_heap_init(tlh);
 
   return tlh;
 }
@@ -669,6 +673,7 @@ thread_local_heap *global_pool_allocate_heap(void) {
 void global_pool_deallocate_heap(thread_local_heap *tlh) {
   mc_enqueue(&GLOBAL_POOL.meta_pool.reusable_heaps[get_core_id()],
              &tlh->freed_list, 0);
+  tlh->holder_thread = 0;
 }
 
 /*******************************************
@@ -677,21 +682,7 @@ void global_pool_deallocate_heap(thread_local_heap *tlh) {
  *******************************************/
 
 static inline void thread_local_heap_init(thread_local_heap *tlh) {
-  int i;
-  for (i = 0; i < NUM_SIZE_CLASSES; ++i) {
-    seq_queue_init(&tlh->cold_sbs[i]);
-#ifdef TRACE_WARM_BLOCKS
-    double_list_init(&tlh->warm_sbs[i]);
-#endif
-	double_list_init(&tlh->hot_sbs[i]);
-    seq_queue_init(&tlh->frozen_sbs[i]);
-    sc_queue_init(&tlh->cool_sbs[i]);
-    tlh->num_cold_sbs[i] = 0;
-    tlh->num_liquid_sbs[i] = 0;
-    tlh->num_frozen_sbs[i] = 0;
-  }
-
-  mc_queue_init(&tlh->freed_list);
+  memset(tlh, 0, sizeof(thread_local_heap));
   tlh->holder_thread = pthread_self();
 }
 
@@ -735,7 +726,7 @@ static inline super_meta_block *thread_local_heap_get_sb(thread_local_heap *tlh,
 static inline super_meta_block *
 thread_local_heap_load_cached_hot_sb(thread_local_heap *tlh, int size_class) {
   super_meta_block *hot_sb = NULL;
-  hot_sb = (super_meta_block*)tlh->hot_sbs[size_class].head;
+  hot_sb = (super_meta_block *)tlh->hot_sbs[size_class].head;
   return hot_sb;
 }
 
@@ -801,8 +792,8 @@ void thread_local_heap_deallocate(thread_local_heap *tlh, void *data_block) {
   void *correlated_shadow_block;
 
   // target the correlated shadow block and the smb managing it
-  correlated_shadow_block = super_block_data_to_shadow(data_block);
   smb = rev_addr_hashset_db_to_smb(data_block);
+  correlated_shadow_block = super_block_data_to_shadow(smb, data_block);
 
   // recycle the correlated shadow block
   if (likely(tlh && tlh->holder_thread == pthread_self())) {

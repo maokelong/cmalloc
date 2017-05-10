@@ -13,7 +13,7 @@ extern int RATIO_DATA_SHADOW[NUM_SIZE_CLASSES];
 /* base */
 
 static inline size_t size_class_num_tiny(void) {
-	return MAX_TINY_CLASSES / STEP_TINY_CLASSES;
+  return MAX_TINY_CLASSES / STEP_TINY_CLASSES;
 }
 
 /* size */
@@ -54,7 +54,7 @@ static inline size_t size_class_block_size(int size_class) {
   return BLOCK_SIZE[size_class];
 }
 
-static inline size_t size_class_ratio_data_shadow(int size_class) {
+static inline int size_class_ratio_data_shadow(int size_class) {
   return RATIO_DATA_SHADOW[size_class];
 }
 

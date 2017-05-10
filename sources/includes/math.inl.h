@@ -21,4 +21,5 @@ static inline int log2_64(uint64_t value) {
 }
 
 static inline size_t power2(size_t power) { return (size_t)1 << power; }
+
 #endif // end of CMALLOC_MATH_H
