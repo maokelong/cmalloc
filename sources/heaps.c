@@ -690,9 +690,9 @@ thread_local_heap *global_pool_allocate_heap(void) {
 }
 
 void global_pool_deallocate_heap(thread_local_heap *tlh) {
+  tlh->holder_thread = 0;
   mc_enqueue(&GLOBAL_POOL.meta_pool.reusable_heaps[get_core_id()],
              &tlh->freed_list, 0);
-  tlh->holder_thread = 0;
 }
 
 /*******************************************
