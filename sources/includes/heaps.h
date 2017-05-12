@@ -53,7 +53,7 @@ struct super_meta_block_ {
   sc_queue_head prev_cool_sb; // tlh: cool
   counted_queue_head remote_freed_blocks;
   cache_aligned int size_class;
-  thread_local_heap *owner_tlh;
+  cache_aligned thread_local_heap *owner_tlh;
   int num_allocated_and_remote_blocks;
   void *end_addr;
   seq_queue_head local_free_blocks;

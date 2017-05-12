@@ -46,9 +46,10 @@ static inline void super_block_check_life_cycle_and_update_counter_when_malloc(
     thread_local_heap *tlh, super_meta_block *sb);
 static inline void super_block_check_life_cycle_and_update_counter_when_free(
     thread_local_heap *tlh, super_meta_block *sb);
-void super_block_convert_life_cycle(thread_local_heap *tlh,
-                                    super_meta_block *sb,
-                                    life_cycle target_life_cycle);
+static inline void super_block_convert_life_cycle_when_malloc(
+    thread_local_heap *tlh, super_meta_block *sb, life_cycle target_life_cycle);
+static inline void super_block_convert_life_cycle_when_free(
+    thread_local_heap *tlh, super_meta_block *sb, life_cycle target_life_cycle);
 void super_block_trace(seq_queue_head queue);
 
 /* global pool */
@@ -71,7 +72,8 @@ global_pool_fetch_cached_or_make_new_sb(thread_local_heap *tlh, int size_class);
 static inline thread_local_heap *global_pool_fetch_cached_heap(void);
 
 /* thread local heap */
-static inline void thread_local_heap_init(thread_local_heap *tlh);
+static inline void
+thread_local_heap_init_excpt_owner_thread(thread_local_heap *tlh);
 static inline super_meta_block *thread_local_heap_get_sb(thread_local_heap *tlh,
                                                          int size_class);
 static inline super_meta_block *
@@ -311,90 +313,46 @@ static inline void super_block_check_life_cycle_and_update_counter_when_malloc(
   case frozen:
     // frozen -> hot ?
     if (super_block_satisfy_hot(sb)) {
-      super_block_convert_life_cycle(tlh, sb, hot);
+      super_block_convert_life_cycle_when_malloc(tlh, sb, hot);
       tlh->num_liquid_sbs[size_class]++;
       tlh->num_frozen_sbs[size_class]--;
 
       return;
     }
     // frozen -> warm ?
-    super_block_convert_life_cycle(tlh, sb, warm);
+    super_block_convert_life_cycle_when_malloc(tlh, sb, warm);
     tlh->num_liquid_sbs[size_class]++;
     tlh->num_frozen_sbs[size_class]--;
     break;
   case cold:
     // cold -> hot ?
     if (super_block_satisfy_hot(sb)) {
-      super_block_convert_life_cycle(tlh, sb, hot);
+      super_block_convert_life_cycle_when_malloc(tlh, sb, hot);
       tlh->num_cold_sbs[size_class]--;
 
       return;
     }
     // cold -> warm ?
-    super_block_convert_life_cycle(tlh, sb, warm);
+    super_block_convert_life_cycle_when_malloc(tlh, sb, warm);
     tlh->num_cold_sbs[size_class]--;
     break;
   case hot:
+    // hot -> warm
     if (super_block_satisfy_warm(sb))
-      super_block_convert_life_cycle(tlh, sb, warm);
+      super_block_convert_life_cycle_when_malloc(tlh, sb, warm);
     break;
   case warm:
     // warm -> hot ?
     if (super_block_satisfy_hot(sb))
-      super_block_convert_life_cycle(tlh, sb, hot);
+      super_block_convert_life_cycle_when_malloc(tlh, sb, hot);
     break;
   }
 }
 
-static inline void super_block_check_life_cycle_and_update_counter_when_free(
-    thread_local_heap *tlh, super_meta_block *sb) {
-  int size_class = sb->size_class;
-  sb->num_allocated_and_remote_blocks--;
-  switch (sb->cur_cycle) {
-  case frozen:
-  case cold:
-    break;
-  case hot:
-    // hot -> cold ?
-    if (super_block_satisfy_cold(sb)) {
-      // hot -> frozen ?
-      if (super_block_satisfy_frozen(tlh, sb)) {
-        super_block_convert_life_cycle(tlh, sb, frozen);
-        tlh->num_liquid_sbs[size_class]--;
-        tlh->num_frozen_sbs[size_class]++;
-        return;
-      }
-
-      super_block_convert_life_cycle(tlh, sb, cold);
-      tlh->num_cold_sbs[size_class]++;
-    }
-    break;
-  case warm:
-    // warm -> cold ?
-    if (super_block_satisfy_cold(sb)) {
-      // warm -> frozen ?
-      if (super_block_satisfy_frozen(tlh, sb)) {
-        super_block_convert_life_cycle(tlh, sb, frozen);
-        tlh->num_liquid_sbs[size_class]--;
-        tlh->num_frozen_sbs[size_class]++;
-
-        return;
-      }
-
-      super_block_convert_life_cycle(tlh, sb, cold);
-      tlh->num_cold_sbs[size_class]++;
-      return;
-    }
-
-    // warm -> hot ?
-    super_block_convert_life_cycle(tlh, sb, hot);
-    break;
-  }
-}
-
-void super_block_convert_life_cycle(thread_local_heap *tlh,
-                                    super_meta_block *sb,
-                                    life_cycle target_life_cycle) {
+static inline void
+super_block_convert_life_cycle_when_malloc(thread_local_heap *tlh,
+                                           super_meta_block *sb,
+                                           life_cycle target_life_cycle) {
   // dequeue
   switch (sb->cur_cycle) {
   case hot:
@@ -422,6 +380,68 @@ void super_block_convert_life_cycle(thread_local_heap *tlh,
 #endif
     sb->cur_cycle = warm;
     break;
+  default:;
+  }
+}
+
+static inline void super_block_check_life_cycle_and_update_counter_when_free(
+    thread_local_heap *tlh, super_meta_block *sb) {
+  int size_class = sb->size_class;
+  sb->num_allocated_and_remote_blocks--;
+  switch (sb->cur_cycle) {
+  case hot:
+    // hot -> cold ?
+    if (super_block_satisfy_cold(sb)) {
+      // hot -> frozen ?
+      if (super_block_satisfy_frozen(tlh, sb)) {
+        super_block_convert_life_cycle_when_free(tlh, sb, frozen);
+        tlh->num_liquid_sbs[size_class]--;
+        tlh->num_frozen_sbs[size_class]++;
+        return;
+      }
+
+      super_block_convert_life_cycle_when_free(tlh, sb, cold);
+      tlh->num_cold_sbs[size_class]++;
+    }
+    break;
+  case warm:
+    // warm -> cold ?
+    if (super_block_satisfy_cold(sb)) {
+      // warm -> frozen ?
+      if (super_block_satisfy_frozen(tlh, sb)) {
+        super_block_convert_life_cycle_when_free(tlh, sb, frozen);
+        tlh->num_liquid_sbs[size_class]--;
+        tlh->num_frozen_sbs[size_class]++;
+
+        return;
+      }
+
+      super_block_convert_life_cycle_when_free(tlh, sb, cold);
+      tlh->num_cold_sbs[size_class]++;
+      return;
+    }
+
+    // warm -> hot ?
+    super_block_convert_life_cycle_when_free(tlh, sb, hot);
+    break;
+  default:;
+  }
+}
+
+static inline void
+super_block_convert_life_cycle_when_free(thread_local_heap *tlh,
+                                         super_meta_block *sb,
+                                         life_cycle target_life_cycle) {
+  // dequeue
+  if (sb->cur_cycle == hot)
+    double_list_remove(sb, &tlh->hot_sbs[sb->size_class]);
+
+  // enqueue
+  switch (target_life_cycle) {
+  case hot:
+    double_list_insert_front(sb, &tlh->hot_sbs[sb->size_class]);
+    sb->cur_cycle = hot;
+    break;
   case cold:
     seq_enqueue(&tlh->cold_sbs[sb->size_class], sb);
     sb->cur_cycle = cold;
@@ -440,6 +460,7 @@ void super_block_convert_life_cycle(thread_local_heap *tlh,
       sb->cur_cycle = frozen;
     }
     break;
+  default:;
   }
 }
 
@@ -570,7 +591,7 @@ static inline thread_local_heap *global_pool_make_new_heap(void) {
     error_and_exit("CMalloc: Error at %s:%d %s.\n", __FILE__, __LINE__,
                    "metadata's vm space has ran out.");
 
-  thread_local_heap_init(tlh);
+  thread_local_heap_init_excpt_owner_thread(tlh);
 
   return tlh;
 }
@@ -651,10 +672,6 @@ static inline thread_local_heap *global_pool_fetch_cached_heap(void) {
   // try to fetch a cached heap
   cached_heap = mc_dequeue(cached_heaps_head, 0);
 
-  // try to update its owner thread
-  if (cached_heap != NULL)
-    cached_heap->holder_thread = pthread_self();
-
   return cached_heap;
 }
 
@@ -666,6 +683,8 @@ thread_local_heap *global_pool_allocate_heap(void) {
 
   if (tlh == NULL)
     tlh = global_pool_make_new_heap();
+
+  tlh->holder_thread = pthread_self();
 
   return tlh;
 }
@@ -681,9 +700,9 @@ void global_pool_deallocate_heap(thread_local_heap *tlh) {
  * @ Object :thread local heap(tlh)
  *******************************************/
 
-static inline void thread_local_heap_init(thread_local_heap *tlh) {
+static inline void
+thread_local_heap_init_excpt_owner_thread(thread_local_heap *tlh) {
   memset(tlh, 0, sizeof(thread_local_heap));
-  tlh->holder_thread = pthread_self();
 }
 
 void *thread_local_heap_allocate(thread_local_heap *tlh, int size_class) {
