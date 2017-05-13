@@ -83,29 +83,24 @@ static inline void *large_malloc(size_t size) {
 
 void *cmalloc_malloc(size_t size) {
   void *ret = NULL;
-  if (unlikely(size == 0))
-    return ret;
-
-  check_init();
-
-  int size_class = size_to_size_class(size);
-
-  if (likely(size_class_in_tiny_or_medium(size_class)))
-    ret = small_malloc(size_class);
-  else
-    ret = large_malloc(size);
-
+  if (size != 0) {
+    check_init();
+    int size_class = size_to_size_class(size);
+    if (likely(size_class_in_tiny_or_medium(size_class)))
+      ret = small_malloc(size_class);
+    else
+      ret = large_malloc(size);
+  }
   return ret;
 }
 
 void cmalloc_free(void *ptr) {
-  if (unlikely(ptr == NULL))
-    return;
-
-  if (likely(global_pool_check_data_addr(ptr)))
-    small_free(ptr);
-  else
-    large_free(ptr);
+  if (ptr != NULL) {
+    if (likely(global_pool_check_data_addr(ptr)))
+      small_free(ptr);
+    else
+      large_free(ptr);
+  }
 }
 
 void *cmalloc_aligned_alloc(size_t alignment, size_t size) {

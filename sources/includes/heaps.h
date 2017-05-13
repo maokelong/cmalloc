@@ -45,21 +45,24 @@ struct shadow_block_ {
 
 // 超级元数据块描述符
 struct super_meta_block_ {
+  // local fields
   union {
-    seq_queue_head prev_sb;   // tlh: hot/cold/frozen
-    double_list_elem dl_elem; // tlh: warm
-    mc_queue_head mc_elem;    // global pool:
+    seq_queue_head prev_sb; // tlh: hot/cold/frozen superblock list
+    mc_queue_head mc_elem;  // global pool:reusable superblock list
   } list_elem;
-  sc_queue_head prev_cool_sb; // tlh: cool
-  counted_queue_head remote_freed_blocks;
-  cache_aligned int size_class;
-  cache_aligned thread_local_heap *owner_tlh;
+  seq_queue_head local_free_blocks; // local free list
   int num_allocated_and_remote_blocks;
-  void *end_addr;
-  seq_queue_head local_free_blocks;
-  void *clean_zone;
-  life_cycle cur_cycle;
-  void *own_sdb;
+  life_cycle cur_cycle; // current life cycle
+  void *clean_zone;     // start addr of the clean zone
+  void *own_sdb;        // the owing super datablock
+
+  // local/remote read only fields
+  cache_aligned int size_class; // the size class
+  thread_local_heap *owner_tlh; // the owner thread-local heap
+
+  // remote fields
+  sc_queue_head prev_cool_sb;             // tlh: cool superblock list
+  counted_queue_head remote_freed_blocks; // remote free list
 };
 
 // 大内存描述符
@@ -74,7 +77,10 @@ struct large_block_header_ {
 
 // 线程本地堆定义
 struct thread_local_heap_ {
-  cache_aligned mc_queue_head freed_list;
+  mc_queue_head freed_list;
+
+  pthread_t holder_thread;
+
   double_list hot_sbs[NUM_SIZE_CLASSES];
 #ifdef TRACE_WARM_BLOCKS
   double_list warm_sbs[NUM_SIZE_CLASSES];
@@ -86,8 +92,6 @@ struct thread_local_heap_ {
   size_t num_cold_sbs[NUM_SIZE_CLASSES];
   size_t num_liquid_sbs[NUM_SIZE_CLASSES];
   size_t num_frozen_sbs[NUM_SIZE_CLASSES];
-
-  pthread_t holder_thread;
 };
 /*******************************************
  * 全局池

@@ -195,8 +195,6 @@ static inline super_meta_block *super_block_assemble(thread_local_heap *tlh,
 
   sc_queue_init(&raw_smb->prev_cool_sb);
   raw_smb->num_allocated_and_remote_blocks = 0;
-  raw_smb->end_addr =
-      (void *)raw_smb + super_meta_block_size_class_to_size(size_class);
   seq_queue_init(&raw_smb->local_free_blocks);
   sc_queue_init(&raw_smb->remote_freed_blocks);
   raw_smb->clean_zone = (void *)raw_smb + sizeof(super_meta_block);
@@ -480,7 +478,6 @@ void super_block_trace(void *elem) {
   printf("\t\t\tnum total: %lu\n", size_class_num_blocks(sb->size_class));
   printf("\t\t\tstart addr: %p\n", sb);
   printf("\t\t\tclean addr: %p\n", sb->clean_zone);
-  printf("\t\t\tend addr: %p\n", sb->end_addr);
 }
 /*******************************************
  * @ Definition
@@ -761,7 +758,8 @@ thread_local_heap_fetch_and_flush_cool_sb(thread_local_heap *tlh,
                                           int size_class) {
   // Try to fetch a cool superblock
   super_meta_block *cool_sb =
-      sc_dequeue(&tlh->cool_sbs[size_class], (int)sizeof(cool_sb->list_elem));
+      sc_dequeue(&tlh->cool_sbs[size_class],
+                 (size_t) & (((super_meta_block *)0x0)->prev_cool_sb));
 
   if (unlikely(cool_sb != NULL)) {
     // Get the head pointer of the remote free list
@@ -829,7 +827,7 @@ void thread_local_heap_deallocate(thread_local_heap *tlh, void *data_block) {
     // mark it cool.
     if (old_head == NULL)
       sc_enqueue(&smb->owner_tlh->cool_sbs[smb->size_class], (void *)smb,
-                 (int)sizeof(smb->list_elem));
+                 (size_t) & (((super_meta_block *)0x0)->prev_cool_sb));
   }
 }
 

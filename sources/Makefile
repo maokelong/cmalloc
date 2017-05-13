@@ -1,4 +1,4 @@
-CFLAGS += -Og -Wstrict-prototypes -fomit-frame-pointer -g -Wall
+CFLAGS += -O3 -Wstrict-prototypes -g -Wall
 libdir = /usr/lib
 LDFLAGS += -pthread -rpath $(libdir) -version-info 1
 CC = gcc
