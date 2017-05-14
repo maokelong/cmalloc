@@ -39,7 +39,6 @@ static void global_init(void) {
   // Register the destructor
   pthread_key_create(&KEY_DESTRUCTOR, (void *)thread_exit);
 
-  size_class_init();
   global_pool_init();
   rev_addr_hashset_init();
   GLOBAL_STATE = INITIALIZED;

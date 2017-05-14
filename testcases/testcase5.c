@@ -13,7 +13,6 @@
 #define REQUEST_SIZE_CLASS 0
 int main(int argc, char *argv[]) {
   int i, j;
-  size_class_init();
   int num_ptrs = 0;
   int *ptrs_recorder[NUM_SBS * 65536 /
                      size_class_block_size(REQUEST_SIZE_CLASS)];

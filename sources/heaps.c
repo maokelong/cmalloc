@@ -143,7 +143,7 @@ static inline super_meta_block *rev_addr_hashset_db_to_smb(void *data_block) {
  *******************************************/
 static inline size_t super_meta_block_size_class_to_size(int size_class) {
   // size of shadow blocks + size of super meta block
-  return SIZE_SDB / size_class_block_size(size_class) * sizeof(void *) +
+  return size_class_num_blocks(size_class) * sizeof(shadow_block) +
          sizeof(super_meta_block);
 }
 
@@ -493,25 +493,24 @@ static inline size_t global_meta_pool_index_sdb(void *sdb) {
 }
 
 static inline void global_meta_pool_init(void) {
-  int i, j, num_cores = get_num_cores();
+  int i, num_cores = get_num_cores();
   GLOBAL_POOL.meta_pool.pool_start =
       request_vm(STARTA_ADDR_META_POOL, LENGTH_META_POOL);
   GLOBAL_POOL.meta_pool.pool_clean = GLOBAL_POOL.meta_pool.pool_start;
   GLOBAL_POOL.meta_pool.pool_end =
       GLOBAL_POOL.meta_pool.pool_start + LENGTH_META_POOL;
+  size_t ruheap_size = sizeof(mc_queue_head) * num_cores;
   GLOBAL_POOL.meta_pool.reusable_heaps =
-      (mc_queue_head *)global_pool_make_dynamic_array(sizeof(mc_queue_head) *
-                                                      num_cores);
+      (mc_queue_head *)global_pool_make_dynamic_array(ruheap_size);
+  size_t rusbs_length = sizeof(mc_queue_head) * num_cores;
   for (i = 0; i < NUM_SIZE_CLASSES; ++i)
     GLOBAL_POOL.meta_pool.reusable_sbs[i] =
-        (mc_queue_head *)global_pool_make_dynamic_array(sizeof(mc_queue_head) *
-                                                        num_cores);
+        (mc_queue_head *)global_pool_make_dynamic_array(rusbs_length);
 
-  for (i = 0; i < num_cores; ++i)
-    mc_queue_init(&GLOBAL_POOL.meta_pool.reusable_heaps[i]);
+  // set to 0
+  memset(GLOBAL_POOL.meta_pool.reusable_heaps, 0, ruheap_size);
   for (i = 0; i < NUM_SIZE_CLASSES; ++i)
-    for (j = 0; j < num_cores; ++j)
-      mc_queue_init(&GLOBAL_POOL.meta_pool.reusable_sbs[i][j]);
+    memset(GLOBAL_POOL.meta_pool.reusable_sbs[i], 0, rusbs_length);
 }
 
 static inline void global_data_pool_init(void) {
@@ -826,7 +825,7 @@ void thread_local_heap_deallocate(thread_local_heap *tlh, void *data_block) {
     void *old_head = NULL;
     void *smbend = (void *)smb + sizeof(super_meta_block);
     old_head = cmprsed_counted_enqueue(&smb->remote_freed_blocks,
-                                      correlated_shadow_block, smbend);
+                                       correlated_shadow_block, smbend);
 
     // if this is the first time the superblock free a datablock remotely,
     // mark it cool.

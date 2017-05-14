@@ -58,6 +58,4 @@ static inline int size_class_ratio_data_shadow(int size_class) {
   return RATIO_DATA_SHADOW[size_class];
 }
 
-void size_class_init(void);
-
 #endif // end of CMALLOC_SIZE_CLASS_INL_H

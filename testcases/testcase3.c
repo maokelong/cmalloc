@@ -11,7 +11,6 @@ int num_ptrs;
 
 int main(int argc, char *argv[]) {
   // 申请并覆写 10 * 10 个 superblock
-  size_class_init();
   int i, j, k;
   for (k = 0; k < 10; ++k)
     for (i = 0; i < 10; ++i) {

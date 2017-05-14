@@ -21,7 +21,6 @@ void thread_job(void) {
 int main(int argc, char *argv[]) {
   // 申请并覆写 10 个 superblock
   int i, j;
-  size_class_init();
   for (i = 0; i < 10; ++i) {
     int total_mem, request_mem = size_class_block_size(i);
     for (total_mem = 0; total_mem + request_mem <= 65536;

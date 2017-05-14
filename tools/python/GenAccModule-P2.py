@@ -6,16 +6,10 @@ import os
 NAME_RESULT = os.path.join(os.path.dirname(__file__), "result.c")
 FILE_RESULT = open(NAME_RESULT, "w")
 
-# 生成比例表（sizeof(super datablock) / (num * sizeof(shadowblock))
-RATIO_DATA_SHADOW = []
-for num in range(2, 32 + 1, 2):
-    RATIO_DATA_SHADOW.append(num)
-for power in range(6, 13 + 1, 1):
-    RATIO_DATA_SHADOW.append(2**power)
-
 # 生成加速表
 ACC_ARRAY_A = ""
 ACC_ARRAY_B = ""
+SIZE_SDB = 65536
 
 for i in range(0, 24):
     if i < 16:

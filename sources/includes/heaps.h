@@ -61,7 +61,7 @@ struct super_meta_block_ {
   thread_local_heap *owner_tlh; // the owner thread-local heap
 
   // remote fields
-  sc_queue_head prev_cool_sb;             // tlh: cool superblock list
+  sc_queue_head prev_cool_sb;                     // tlh: cool superblock list
   cmprsed_counted_queue_head remote_freed_blocks; // remote free list
 };
 
