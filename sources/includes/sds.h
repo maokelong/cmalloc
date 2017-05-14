@@ -30,4 +30,11 @@ struct double_list_ {
  *******************************************/
 typedef void *seq_queue_head;
 
+/*******************************************
+* Compressed Sequential List (LIFO)
+*******************************************/
+typedef void *cmprsed_seq_head;
+
+typedef struct { uint16_t sn; } cmpresed_seq_elem;
+
 #endif // end of CMALLOC_SDS_H

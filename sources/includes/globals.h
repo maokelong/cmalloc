@@ -25,7 +25,6 @@
  *******************************************/
 #define STEP_TINY_CLASSES 16
 #define MAX_TINY_CLASSES 256
-#define MAX_MEDIUM_CLASSES 65536
 #define NUM_SDB_PAGES 16
 #define NUM_SIZE_CLASSES 24
 #define SIZE_SDB (size_t)(NUM_SDB_PAGES * PAGE_SIZE)
