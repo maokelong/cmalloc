@@ -145,4 +145,44 @@ static inline void *counted_chain_dequeue(queue_head *queue, uint32_t *count) {
   }
 }
 
+/*******************************************
+* 计数的(count) 队列 < 压缩后 >
+*******************************************/
+
+static inline uint32_t cmprsed_counted_num_elems(queue_head *queue) {
+  unsigned long long head;
+  head = queue->head;
+  return ABA_COUNT(head) >> ABA_ADDR_BIT;
+}
+
+static inline void *cmprsed_counted_enqueue(queue_head *queue, void *elem,
+                                            void *smbend) {
+  unsigned long long old_head, new_head, prev;
+  do {
+    old_head = queue->head;
+    *(ptr_t *)elem = ABA_ADDR(old_head) == 0
+                         ? (uint16_t)-1
+                         : (ABA_ADDR(old_head) - smbend) / sizeof(uint16_t);
+    new_head = (ptr_t)elem;
+    new_head |= ABA_COUNT(old_head) + ABA_COUNT_ONE;
+
+  } while ((prev = compare_and_swap64_value(&queue->head, old_head,
+                                            new_head)) != old_head);
+
+  return (void *)prev;
+}
+static inline void *cmprsed_counted_chain_dequeue(queue_head *queue,
+                                                  uint32_t *count) {
+  unsigned long long old_head;
+  while (1) {
+    old_head = *(ptr_t *)queue;
+    if (old_head == 0)
+      return (NULL);
+    if (compare_and_swap64(&queue->head, old_head, 0)) {
+      *count = ABA_COUNT(old_head) >> ABA_ADDR_BIT;
+      return (ABA_ADDR(old_head));
+    }
+  }
+}
+
 #endif // end of CMALLOC_CDS_INL_H

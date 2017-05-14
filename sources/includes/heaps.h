@@ -62,7 +62,7 @@ struct super_meta_block_ {
 
   // remote fields
   sc_queue_head prev_cool_sb;             // tlh: cool superblock list
-  counted_queue_head remote_freed_blocks; // remote free list
+  cmprsed_counted_queue_head remote_freed_blocks; // remote free list
 };
 
 // 大内存描述符

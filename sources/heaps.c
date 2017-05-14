@@ -473,7 +473,7 @@ void super_block_trace(void *elem) {
   printf("\t\t\tnum alloced / remotely freed: %d\n",
          sb->num_allocated_and_remote_blocks);
   printf("\t\t\tnum remotely freed: %d\n",
-         counted_num_elems(&sb->remote_freed_blocks));
+         cmprsed_counted_num_elems(&sb->remote_freed_blocks));
   printf("\t\t\tnum total: %lu\n", size_class_num_blocks(sb->size_class));
   printf("\t\t\tstart addr: %p\n", sb);
   printf("\t\t\tclean addr: %p\n", sb->clean_zone);
@@ -765,8 +765,8 @@ thread_local_heap_fetch_and_flush_cool_sb(thread_local_heap *tlh,
     // and the number of remote freed datablocks
     uint32_t num_remote_freed_blocks = 0;
     void *remote_freed_list;
-    remote_freed_list = counted_chain_dequeue(&cool_sb->remote_freed_blocks,
-                                              &num_remote_freed_blocks);
+    remote_freed_list = cmprsed_counted_chain_dequeue(
+        &cool_sb->remote_freed_blocks, &num_remote_freed_blocks);
 
     // The number of remote freed blocks on the cool superblock
     // is possible to be equal to zero in the following scenario:
@@ -824,8 +824,9 @@ void thread_local_heap_deallocate(thread_local_heap *tlh, void *data_block) {
   } else {
     // remote free routine
     void *old_head = NULL;
-    old_head =
-        counted_enqueue(&smb->remote_freed_blocks, correlated_shadow_block);
+    void *smbend = (void *)smb + sizeof(super_meta_block);
+    old_head = cmprsed_counted_enqueue(&smb->remote_freed_blocks,
+                                      correlated_shadow_block, smbend);
 
     // if this is the first time the superblock free a datablock remotely,
     // mark it cool.
