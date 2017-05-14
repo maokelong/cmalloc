@@ -20,7 +20,7 @@ ACC_ARRAY_B = ""
 for i in range(0, 24):
     if i < 16:
         # 生成加速表A
-        ACC_ARRAY_A += "{"
+        ACC_ARRAY_A += "\n{"
         for offset_data in range(0, 65536, 16):
             ACC_ARRAY_A += str(int(offset_data / (2 * (i + 1))))
             if offset_data != 65535:
@@ -43,4 +43,4 @@ FILE_RESULT.write("// datablock's offset to shadowblock's offset\n")
 FILE_RESULT.write(
     "int HELPER_DATA_SHADOW_HIGH[] = {" + ACC_ARRAY_B + "}; \n")
 FILE_RESULT.write(
-    "short HELPER_DATA_SHADOW_LOW[16][65536] = {" + ACC_ARRAY_A + "}; \n")
+    "short HELPER_DATA_SHADOW_LOW[16][65536 >> 4] = {" + ACC_ARRAY_A + "}; \n")
