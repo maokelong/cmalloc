@@ -173,7 +173,7 @@ void *cmalloc_memalign(size_t boundary, size_t size) {
   if (size == 0)
     return NULL;
 
-  if (boundary <= 256 && size <= 65536) {
+  if (boundary <= 256 && size <= SIZE_SDB) {
     /* In this case, we handle it as small allocations */
     int boundary_cls = size_to_size_class(boundary);
     int size_cls = size_to_size_class(size);

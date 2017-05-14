@@ -19,6 +19,7 @@ typedef struct queue_head_ queue_head;
 typedef queue_head mc_queue_head;
 typedef queue_head sc_queue_head;
 typedef queue_head counted_queue_head;
+typedef queue_head cmprsed_counted_queue_head;
 
 struct queue_head_ {
   cache_aligned volatile ptr_t head;

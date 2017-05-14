@@ -40,7 +40,7 @@ typedef enum { hot, warm, cold, frozen } life_cycle;
 
 // 影子块描述符
 struct shadow_block_ {
-  seq_queue_head prev_head;
+  cmpresed_seq_elem prev_head;
 };
 
 // 超级元数据块描述符
@@ -50,7 +50,7 @@ struct super_meta_block_ {
     seq_queue_head prev_sb; // tlh: hot/cold/frozen superblock list
     mc_queue_head mc_elem;  // global pool:reusable superblock list
   } list_elem;
-  seq_queue_head local_free_blocks; // local free list
+  cmprsed_seq_head local_free_blocks; // local free list
   int num_allocated_and_remote_blocks;
   life_cycle cur_cycle; // current life cycle
   void *clean_zone;     // start addr of the clean zone
@@ -62,7 +62,7 @@ struct super_meta_block_ {
 
   // remote fields
   sc_queue_head prev_cool_sb;             // tlh: cool superblock list
-  counted_queue_head remote_freed_blocks; // remote free list
+  cmprsed_counted_queue_head remote_freed_blocks; // remote free list
 };
 
 // 大内存描述符

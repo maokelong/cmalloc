@@ -4,7 +4,7 @@
 #include "globals.h"
 
 extern int HELPER_DATA_SHADOW_HIGH[NUM_SIZE_CLASSES];
-extern short HELPER_DATA_SHADOW_LOW[16][65536 >> 4];
+extern uint16_t HELPER_DATA_SHADOW_LOW[16][SIZE_SDB >> 4];
 
 static inline int acc_unit_offdata_to_offshadow(int offset_data,
                                                 int size_class) {

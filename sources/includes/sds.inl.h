@@ -80,4 +80,28 @@ static inline int seq_visit(seq_queue_head queue, void (*trace)(void *elem)) {
   return num_elems;
 }
 
+static inline void cmprsed_seq_queue_init(cmprsed_seq_head *queue) {
+  *queue = NULL;
+}
+
+static inline void cmprsed_seq_enqueue(cmprsed_seq_head *queue, void *elem,
+                                       void *smbend) {
+  ((cmpresed_seq_elem *)elem)->sn = unlikely(*queue == NULL)
+                                        ? (uint16_t)-1
+                                        : (*queue - smbend) / sizeof(uint16_t);
+  *queue = elem;
+}
+
+static inline void *cmprsed_seq_dequeue(cmprsed_seq_head *queue, void *smbend) {
+  void *old_head = *queue;
+
+  if (old_head == NULL)
+    return NULL;
+
+  uint16_t sn = ((cmpresed_seq_elem *)old_head)->sn;
+  *queue = unlikely(sn == (uint16_t)-1) ? NULL : sn * sizeof(uint16_t) + smbend;
+
+  return old_head;
+}
+
 #endif // end of CMALLOC_SDS_INL_H

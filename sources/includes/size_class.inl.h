@@ -21,7 +21,7 @@ static inline size_t size_class_num_tiny(void) {
 static inline int size_in_tiny(size_t size) { return size <= MAX_TINY_CLASSES; }
 
 static inline int size_in_medium(size_t size) {
-  return size <= MAX_MEDIUM_CLASSES && size > MAX_TINY_CLASSES;
+  return size <= SIZE_SDB && size > MAX_TINY_CLASSES;
 }
 
 static inline int size_to_size_class(size_t size) {
