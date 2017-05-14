@@ -40,7 +40,7 @@ typedef enum { hot, warm, cold, frozen } life_cycle;
 
 // 影子块描述符
 struct shadow_block_ {
-  seq_queue_head prev_head;
+  cmpresed_seq_elem prev_head;
 };
 
 // 超级元数据块描述符
