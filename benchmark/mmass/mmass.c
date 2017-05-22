@@ -35,7 +35,8 @@ int main(int argc, const char *argv[]) {
   gettimeofday(&end, NULL);
   long timeuse =
       1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
-  printf("time koken: %f sec\n", timeuse / 1000000.0);
+  printf("%d: GB, time koken: %f sec\n", argc == 1 ? 1 : atoi(argv[1]),
+         timeuse / 1000000.0);
 
   return 0;
 }
