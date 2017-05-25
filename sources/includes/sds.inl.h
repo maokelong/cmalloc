@@ -56,50 +56,50 @@ static inline int double_list_visit(double_list *list,
   return num_elems;
 }
 
-static inline void seq_queue_init(seq_queue_head *queue) { *queue = NULL; }
+static inline void stack_init(stack_top *stack) { *stack = NULL; }
 
-static inline void seq_enqueue(seq_queue_head *queue, void *element) {
-  *(void **)element = *queue;
-  *queue = element;
+static inline void stack_push(stack_top *stack, void *element) {
+  *(void **)element = *stack;
+  *stack = element;
 }
 
-static inline void *seq_dequeue(seq_queue_head *queue) {
-  void *old_head = *queue;
+static inline void *stack_pop(stack_top *stack) {
+  void *old_head = *stack;
   if (old_head == NULL) {
     return NULL;
   }
-  *queue = *(void **)old_head;
+  *stack = *(void **)old_head;
   return old_head;
 }
 
-static inline int seq_visit(seq_queue_head queue, void (*trace)(void *elem)) {
+static inline int stack_visit(stack_top stack, void (*trace)(void *elem)) {
   int num_elems;
-  for (num_elems = 0; queue != NULL; queue = *(void **)queue, num_elems++)
+  for (num_elems = 0; stack != NULL; stack = *(void **)stack, num_elems++)
     if (trace)
-      trace((void *)queue);
+      trace((void *)stack);
   return num_elems;
 }
 
-static inline void cmprsed_seq_queue_init(cmprsed_seq_head *queue) {
-  *queue = NULL;
+static inline void cmprsed_stack_init(cmprsed_stack_top *stack) {
+  *stack = NULL;
 }
 
-static inline void cmprsed_seq_enqueue(cmprsed_seq_head *queue, void *elem,
+static inline void cmprsed_stack_push(cmprsed_stack_top *stack, void *elem,
                                        void *smbend) {
-  ((cmpresed_seq_elem *)elem)->sn = unlikely(*queue == NULL)
+  ((cmpresed_stack_elem *)elem)->sn = unlikely(*stack == NULL)
                                         ? (uint16_t)-1
-                                        : (*queue - smbend) / sizeof(uint16_t);
-  *queue = elem;
+                                        : (*stack - smbend) / sizeof(uint16_t);
+  *stack = elem;
 }
 
-static inline void *cmprsed_seq_dequeue(cmprsed_seq_head *queue, void *smbend) {
-  void *old_head = *queue;
+static inline void *cmprsed_stack_pop(cmprsed_stack_top *stack, void *smbend) {
+  void *old_head = *stack;
 
   if (old_head == NULL)
     return NULL;
 
-  uint16_t sn = ((cmpresed_seq_elem *)old_head)->sn;
-  *queue = unlikely(sn == (uint16_t)-1) ? NULL : sn * sizeof(uint16_t) + smbend;
+  uint16_t sn = ((cmpresed_stack_elem *)old_head)->sn;
+  *stack = unlikely(sn == (uint16_t)-1) ? NULL : sn * sizeof(uint16_t) + smbend;
 
   return old_head;
 }

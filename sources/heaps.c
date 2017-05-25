@@ -50,7 +50,7 @@ static inline void super_block_convert_life_cycle_when_malloc(
     thread_local_heap *tlh, super_meta_block *sb, life_cycle target_life_cycle);
 static inline void super_block_convert_life_cycle_when_free(
     thread_local_heap *tlh, super_meta_block *sb, life_cycle target_life_cycle);
-void super_block_trace(seq_queue_head queue);
+void super_block_trace(stack_top stack);
 
 /* global pool */
 global_pool GLOBAL_POOL;
@@ -155,7 +155,7 @@ static inline void *
 super_meta_block_allocate_freed_shadow(super_meta_block *smb) {
   shadow_block *shadowb = NULL;
   void *smbend = (void *)smb + sizeof(super_meta_block);
-  shadowb = cmprsed_seq_dequeue(&smb->local_free_blocks, smbend);
+  shadowb = cmprsed_stack_pop(&smb->local_free_blocks, smbend);
   return shadowb;
 }
 
@@ -179,7 +179,7 @@ static inline void super_block_init_cached(thread_local_heap *tlh,
   smb->owner_tlh = tlh;
 
   tlh->num_frozen_sbs[size_class]++;
-  seq_enqueue(&tlh->frozen_sbs[size_class], smb);
+  stack_push(&tlh->frozen_sbs[size_class], smb);
 }
 
 static inline super_meta_block *super_block_assemble(thread_local_heap *tlh,
@@ -194,10 +194,10 @@ static inline super_meta_block *super_block_assemble(thread_local_heap *tlh,
 
   super_block_init_cached(tlh, raw_smb, size_class);
 
-  sc_queue_init(&raw_smb->prev_cool_sb);
+  sc_stack_init(&raw_smb->prev_cool_sb);
   raw_smb->num_allocated_and_remote_blocks = 0;
-  cmprsed_seq_queue_init(&raw_smb->local_free_blocks);
-  sc_queue_init(&raw_smb->remote_freed_blocks);
+  cmprsed_stack_init(&raw_smb->local_free_blocks);
+  sc_stack_init(&raw_smb->remote_freed_blocks);
   raw_smb->clean_zone = (void *)raw_smb + sizeof(super_meta_block);
   raw_smb->size_class = size_class;
   raw_smb->cur_cycle = frozen;
@@ -352,7 +352,7 @@ static inline void
 super_block_convert_life_cycle_when_malloc(thread_local_heap *tlh,
                                            super_meta_block *sb,
                                            life_cycle target_life_cycle) {
-  // dequeue
+  // pop
   switch (sb->cur_cycle) {
   case hot:
     double_list_remove(sb, &tlh->hot_sbs[sb->size_class]);
@@ -360,14 +360,14 @@ super_block_convert_life_cycle_when_malloc(thread_local_heap *tlh,
   case warm:
     break;
   case cold:
-    seq_dequeue(&tlh->cold_sbs[sb->size_class]);
+    stack_pop(&tlh->cold_sbs[sb->size_class]);
     break;
   case frozen:
-    seq_dequeue(&tlh->frozen_sbs[sb->size_class]);
+    stack_pop(&tlh->frozen_sbs[sb->size_class]);
     break;
   }
 
-  // enqueue
+  // push
   switch (target_life_cycle) {
   case hot:
     double_list_insert_front(sb, &tlh->hot_sbs[sb->size_class]);
@@ -431,31 +431,31 @@ static inline void
 super_block_convert_life_cycle_when_free(thread_local_heap *tlh,
                                          super_meta_block *sb,
                                          life_cycle target_life_cycle) {
-  // dequeue
+  // pop
   if (sb->cur_cycle == hot)
     double_list_remove(sb, &tlh->hot_sbs[sb->size_class]);
 
-  // enqueue
+  // push
   switch (target_life_cycle) {
   case hot:
     double_list_insert_front(sb, &tlh->hot_sbs[sb->size_class]);
     sb->cur_cycle = hot;
     break;
   case cold:
-    seq_enqueue(&tlh->cold_sbs[sb->size_class], sb);
+    stack_push(&tlh->cold_sbs[sb->size_class], sb);
     sb->cur_cycle = cold;
     break;
   case frozen:
     freeze_vm(sb->own_sdb, SIZE_SDB);
 
     if (super_block_satisfy_return_to_global_pool(tlh, sb)) {
-      mc_queue_head *reusable_list;
+      mc_treiber_stack_top *reusable_list;
       int sc = sb->size_class;
       reusable_list = &GLOBAL_POOL.meta_pool.reusable_sbs[sc][get_core_id()];
       tlh->num_frozen_sbs[sb->size_class]--;
-      mc_enqueue(reusable_list, sb, 0);
+      mc_push(reusable_list, sb, 0);
     } else {
-      seq_enqueue(&tlh->frozen_sbs[sb->size_class], sb);
+      stack_push(&tlh->frozen_sbs[sb->size_class], sb);
       sb->cur_cycle = frozen;
     }
     break;
@@ -473,7 +473,7 @@ void super_block_trace(void *elem) {
   printf("\t\t\tnum alloced / remotely freed: %d\n",
          sb->num_allocated_and_remote_blocks);
   printf("\t\t\tnum remotely freed: %d\n",
-         cmprsed_counted_num_elems(&sb->remote_freed_blocks));
+         cmprsed_counted_stack_num_elems(&sb->remote_freed_blocks));
   printf("\t\t\tnum total: %lu\n", size_class_num_blocks(sb->size_class));
   printf("\t\t\tstart addr: %p\n", sb);
   printf("\t\t\tclean addr: %p\n", sb->clean_zone);
@@ -499,13 +499,13 @@ static inline void global_meta_pool_init(void) {
   GLOBAL_POOL.meta_pool.pool_clean = GLOBAL_POOL.meta_pool.pool_start;
   GLOBAL_POOL.meta_pool.pool_end =
       GLOBAL_POOL.meta_pool.pool_start + LENGTH_META_POOL;
-  size_t ruheap_size = sizeof(mc_queue_head) * num_cores;
+  size_t ruheap_size = sizeof(mc_treiber_stack_top) * num_cores;
   GLOBAL_POOL.meta_pool.reusable_heaps =
-      (mc_queue_head *)global_pool_make_dynamic_array(ruheap_size);
-  size_t rusbs_length = sizeof(mc_queue_head) * num_cores;
+      (mc_treiber_stack_top *)global_pool_make_dynamic_array(ruheap_size);
+  size_t rusbs_length = sizeof(mc_treiber_stack_top) * num_cores;
   for (i = 0; i < NUM_SIZE_CLASSES; ++i)
     GLOBAL_POOL.meta_pool.reusable_sbs[i] =
-        (mc_queue_head *)global_pool_make_dynamic_array(rusbs_length);
+        (mc_treiber_stack_top *)global_pool_make_dynamic_array(rusbs_length);
 
   // set to 0
   memset(GLOBAL_POOL.meta_pool.reusable_heaps, 0, ruheap_size);
@@ -623,14 +623,14 @@ global_pool_fetch_cached_sb(thread_local_heap *tlh, int size_class) {
   super_meta_block *cached_sb = NULL;
 
   // fetch a sb cached on the global pool(same core)
-  cached_sb = (super_meta_block *)mc_dequeue(
+  cached_sb = (super_meta_block *)mc_pop(
       &GLOBAL_POOL.meta_pool.reusable_sbs[size_class][get_core_id()], 0);
 
   // fetch a sb(all cores)
   /* int i;
   if (cached_sb == NULL)
     for (i = 0; i < get_num_cores(); ++i)
-      if ((cached_sb = (super_meta_block *)mc_dequeue(
+      if ((cached_sb = (super_meta_block *)mc_pop(
                &GLOBAL_POOL.meta_pool.reusable_sbs[size_class][i], 0)) != NULL)
         break; */
 
@@ -657,7 +657,7 @@ global_pool_fetch_cached_or_make_new_sb(thread_local_heap *tlh,
 
 static inline thread_local_heap *global_pool_fetch_cached_heap(void) {
   thread_local_heap *cached_heap;
-  mc_queue_head *cached_heaps_head;
+  mc_treiber_stack_top *cached_heaps_head;
   int core_id;
 
   // clues to cached heaps
@@ -665,7 +665,7 @@ static inline thread_local_heap *global_pool_fetch_cached_heap(void) {
   cached_heaps_head = &GLOBAL_POOL.meta_pool.reusable_heaps[core_id];
 
   // try to fetch a cached heap
-  cached_heap = mc_dequeue(cached_heaps_head, 0);
+  cached_heap = mc_pop(cached_heaps_head, 0);
 
   return cached_heap;
 }
@@ -686,7 +686,7 @@ thread_local_heap *global_pool_allocate_heap(void) {
 
 void global_pool_deallocate_heap(thread_local_heap *tlh) {
   tlh->holder_thread = 0;
-  mc_enqueue(&GLOBAL_POOL.meta_pool.reusable_heaps[get_core_id()],
+  mc_push(&GLOBAL_POOL.meta_pool.reusable_heaps[get_core_id()],
              &tlh->freed_list, 0);
 }
 
@@ -756,7 +756,7 @@ thread_local_heap_fetch_and_flush_cool_sb(thread_local_heap *tlh,
                                           int size_class) {
   // Try to fetch a cool superblock
   super_meta_block *cool_sb =
-      sc_dequeue(&tlh->cool_sbs[size_class],
+      sc_pop(&tlh->cool_sbs[size_class],
                  (size_t) & (((super_meta_block *)0x0)->prev_cool_sb));
 
   if (unlikely(cool_sb != NULL)) {
@@ -764,7 +764,7 @@ thread_local_heap_fetch_and_flush_cool_sb(thread_local_heap *tlh,
     // and the number of remote freed datablocks
     uint32_t num_remote_freed_blocks = 0;
     void *remote_freed_list;
-    remote_freed_list = cmprsed_counted_chain_dequeue(
+    remote_freed_list = cmprsed_counted_stack_chain_pop(
         &cool_sb->remote_freed_blocks, &num_remote_freed_blocks);
 
     // The number of remote freed blocks on the cool superblock
@@ -817,20 +817,20 @@ void thread_local_heap_deallocate(thread_local_heap *tlh, void *data_block) {
     // local free routine
     void *smbend = (void *)smb + sizeof(super_meta_block);
 
-    cmprsed_seq_enqueue(&smb->local_free_blocks, correlated_shadow_block,
+    cmprsed_stack_push(&smb->local_free_blocks, correlated_shadow_block,
                         smbend);
     super_block_check_life_cycle_and_update_counter_when_free(tlh, smb);
   } else {
     // remote free routine
     void *old_head = NULL;
     void *smbend = (void *)smb + sizeof(super_meta_block);
-    old_head = cmprsed_counted_enqueue(&smb->remote_freed_blocks,
+    old_head = cmprsed_counted_stack_push(&smb->remote_freed_blocks,
                                        correlated_shadow_block, smbend);
 
     // if this is the first time the superblock free a datablock remotely,
     // mark it cool.
     if (old_head == NULL)
-      sc_enqueue(&smb->owner_tlh->cool_sbs[smb->size_class], (void *)smb,
+      sc_push(&smb->owner_tlh->cool_sbs[smb->size_class], (void *)smb,
                  (size_t) & (((super_meta_block *)0x0)->prev_cool_sb));
   }
 }
@@ -842,12 +842,12 @@ void thread_local_heap_trace(thread_local_heap **pTlh) {
   int i;
   printf("\tFrozen superblocks:\n");
   for (i = 0; i < NUM_SIZE_CLASSES; ++i)
-    num_frozens += seq_visit(tlh->frozen_sbs[i], &super_block_trace);
+    num_frozens += stack_visit(tlh->frozen_sbs[i], &super_block_trace);
   printf("\t\t->Sum up to: %d\n\n", num_frozens);
 
   printf("\tcold superblocks:\n");
   for (i = 0; i < NUM_SIZE_CLASSES; ++i)
-    num_colds += seq_visit(tlh->cold_sbs[i], &super_block_trace);
+    num_colds += stack_visit(tlh->cold_sbs[i], &super_block_trace);
   printf("\t\t->Sum up to: %d\n\n", num_colds);
 
   printf("\tHot superblocks:\n");

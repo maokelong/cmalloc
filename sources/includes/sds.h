@@ -4,7 +4,7 @@
 /*
 * @ File Name : sds.h
 *
-* @ Intro: Sequential List identifiers and algorithms
+* @ Intro: Stack identifiers and algorithms
 *
 */
 
@@ -26,15 +26,15 @@ struct double_list_ {
 };
 
 /*******************************************
- * Sequential List (LIFO)
+ * Stack (LIFO)
  *******************************************/
-typedef void *seq_queue_head;
+typedef void *stack_top;
 
 /*******************************************
-* Compressed Sequential List (LIFO)
+* Compressed Stack (LIFO)
 *******************************************/
-typedef void *cmprsed_seq_head;
+typedef void *cmprsed_stack_top;
 
-typedef struct { uint16_t sn; } cmpresed_seq_elem;
+typedef struct { uint16_t sn; } cmpresed_stack_elem;
 
 #endif // end of CMALLOC_SDS_H

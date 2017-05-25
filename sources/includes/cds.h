@@ -14,14 +14,14 @@
 /*******************************************
  * 结构定义
  *******************************************/
-typedef struct queue_head_ queue_head;
+typedef struct treiber_stack_top_ treiber_stack_top;
 
-typedef queue_head mc_queue_head;
-typedef queue_head sc_queue_head;
-typedef queue_head counted_queue_head;
-typedef queue_head cmprsed_counted_queue_head;
+typedef treiber_stack_top mc_treiber_stack_top;
+typedef treiber_stack_top sc_treiber_stack_top;
+typedef treiber_stack_top counted_treiber_stack_top;
+typedef treiber_stack_top cmprsed_counted_stack_treiber_stack_top;
 
-struct queue_head_ {
+struct treiber_stack_top_ {
   cache_aligned volatile ptr_t head;
 };
 #endif // end of CMALLOC_CDS_H

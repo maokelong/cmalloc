@@ -40,17 +40,17 @@ typedef enum { hot, warm, cold, frozen } life_cycle;
 
 // 影子块描述符
 struct shadow_block_ {
-  cmpresed_seq_elem prev_head;
+  cmpresed_stack_elem prev_head;
 };
 
 // 超级元数据块描述符
 struct super_meta_block_ {
   // local fields
   union {
-    seq_queue_head prev_sb; // tlh: hot/cold/frozen superblock list
-    mc_queue_head mc_elem;  // global pool:reusable superblock list
+    stack_top prev_sb; // tlh: hot/cold/frozen superblock list
+    mc_treiber_stack_top mc_elem;  // global pool:reusable superblock list
   } list_elem;
-  cmprsed_seq_head local_free_blocks; // local free list
+  cmprsed_stack_top local_free_blocks; // local free list
   int num_allocated_and_remote_blocks;
   life_cycle cur_cycle; // current life cycle
   void *clean_zone;     // start addr of the clean zone
@@ -61,8 +61,8 @@ struct super_meta_block_ {
   thread_local_heap *owner_tlh; // the owner thread-local heap
 
   // remote fields
-  sc_queue_head prev_cool_sb;                     // tlh: cool superblock list
-  cmprsed_counted_queue_head remote_freed_blocks; // remote free list
+  sc_treiber_stack_top prev_cool_sb;                     // tlh: cool superblock list
+  cmprsed_counted_stack_treiber_stack_top remote_freed_blocks; // remote free list
 };
 
 // 大内存描述符
@@ -77,7 +77,7 @@ struct large_block_header_ {
 
 // 线程本地堆定义
 struct thread_local_heap_ {
-  mc_queue_head freed_list;
+  mc_treiber_stack_top freed_list;
 
   pthread_t holder_thread;
 
@@ -85,9 +85,9 @@ struct thread_local_heap_ {
 #ifdef TRACE_WARM_BLOCKS
   double_list warm_sbs[NUM_SIZE_CLASSES];
 #endif
-  seq_queue_head cold_sbs[NUM_SIZE_CLASSES];
-  seq_queue_head frozen_sbs[NUM_SIZE_CLASSES];
-  sc_queue_head cool_sbs[NUM_SIZE_CLASSES];
+  stack_top cold_sbs[NUM_SIZE_CLASSES];
+  stack_top frozen_sbs[NUM_SIZE_CLASSES];
+  sc_treiber_stack_top cool_sbs[NUM_SIZE_CLASSES];
 
   size_t num_cold_sbs[NUM_SIZE_CLASSES];
   size_t num_liquid_sbs[NUM_SIZE_CLASSES];
@@ -104,9 +104,9 @@ struct global_meta_pool_ {
   volatile void *pool_clean;
 
   // reusable_heaps[core id]
-  mc_queue_head *reusable_heaps;
+  mc_treiber_stack_top *reusable_heaps;
   // reusable_sbs[size class][core id]
-  mc_queue_head *reusable_sbs[NUM_SIZE_CLASSES];
+  mc_treiber_stack_top *reusable_sbs[NUM_SIZE_CLASSES];
 };
 
 // 全局数据池描述符
